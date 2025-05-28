@@ -291,11 +291,11 @@ class Snake:
         self.exp -= self.exp_to_level
         self.exp_to_level = int(self.exp_to_level * 1.5)
         self.evolution_points += 1
-        self.stat_points += 2  # 레벨업 시 2개의 스탯 포인트 획득
+        self.stat_points += 1  # 레벨업 시 1개의 스탯 포인트 획득
         return self.level
 
     def can_evolve(self):
-        if self.level >= 10 and self.evolution_form != "ULTIMATE":
+        if self.level >= 10 and self.evolution_form != "Max_Level":
             return True
         if self.level >= 5 and self.evolution_form == "NORMAL":
             return True
@@ -312,8 +312,10 @@ class Snake:
             elif new_form == "TANK":
                 self.energy = min(200, self.energy + 50)
                 self.collision_immune = True
+                #tank 효과 변경 -> 충돌면역 to 체력증가? or 충돌면역 유지하되 스태미너 소모 3배?
             elif new_form == "HUNTER":
                 self.food_detection_range = 150
+                #효과 변경됨에 따라 무쓸모 능력대체체
             elif new_form == "ULTIMATE":
                 self.collision_immune = True
                 self.food_detection_range = 200
@@ -592,7 +594,7 @@ class Snake:
                     self.boost = 2 if food.is_item else 1
                     self.energy += 40 if food.is_item else 10
                     self.score += 10 if food.is_item else 1
-                    self.add_exp(100 if food.is_item else 50)
+                    self.add_exp(100 if food.is_item else 1000)
                     self.grow = True
                 break
 
