@@ -1245,8 +1245,8 @@ def update_items(food_list, snakes, item_timer, special_item_timer):
 
 # 보스전 상수
 BOSS_EVOLUTION_TIME = {
-    "PHASE2": 180,  # 3분 (15fps * 180)
-    "PHASE3": 360   # 6분 (15fps * 360) - 최종 페이즈
+    "PHASE2": 2700,  # 3분 (15fps * 180초)
+    "PHASE3": 5400   # 6분 (15fps * 360초) - 최종 페이즈
 }
 
 BOSS_PATTERNS = {
