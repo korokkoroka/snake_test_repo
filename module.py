@@ -35,7 +35,7 @@ SPAWN_AREA_PADDING = 100   # 화면 가장자리로부터의 여유 공간
 SAFE_SPAWN_DISTANCE = 150  # 다른 뱀으로부터의 최소 안전 거리
 DASH_DURATION = 60      # 4초 (15fps * 4)
 DASH_COOLDOWN = 150     # 10초
-DASH_ENERGY_COST = 1    # 초당 에너지 소모량 (절반으로 감소)
+DASH_ENERGY_COST = 1    # 초당 에너지 소모량
 
 #############################################
 # 진화 모드 상수
@@ -44,9 +44,7 @@ DASH_ENERGY_COST = 1    # 초당 에너지 소모량 (절반으로 감소)
 MAX_STAT_LEVEL = 5
 STAT_COSTS = {
     "SPEED": 1,
-    "ENERGY": 1,
-    "STRENGTH": 1,
-    "DEFENSE": 1
+    "ENERGY": 1
 }
 
 # 진화 형태 정의
@@ -63,18 +61,18 @@ EVOLUTION_FORMS = {
     },
     "TANK": {
         "color": RED,
-        "abilities": ["체력 증가", "충돌 저항"],
+        "abilities": ["체력 증가", "E키: 일회용 피해 면역 (20초 쿨다운)"],
         "description": "생존력 특화"
     },
     "HUNTER": {
         "color": PURPLE,
-        "abilities": ["먹이 감지", "긴 대시"],
+        "abilities": ["먹이 흡수 범위 3배", "긴 대시"],
         "description": "사냥 특화"
     },
     "ULTIMATE": {
         "color": GOLD,
         "abilities": ["모든 능력", "무적 대시"],
-        "description": "궁극의 형태"
+        "description": "완전진화 형태"
     }
 }
 
@@ -82,18 +80,21 @@ EVOLUTION_FORMS = {
 SPECIAL_ITEMS = {
     "SHIELD": {
         "color": (0, 191, 255),  # 하늘색
-        "duration": 75,  # 5초
-        "effect": "방어력 2배 증가"
+        "duration": 45,  # 3초
+        "effect": "피해 면역",
+        "name": "쉴드"  # 한글 이름 추가
     },
     "SPEED_BOOST": {
         "color": (255, 215, 0),  # 골드
-        "duration": 60,  # 4초
-        "effect": "이동속도 2배 증가"
+        "duration": 30,  # 2초
+        "effect": "이동속도 2배 증가",
+        "name": "스피드 부스트"
     },
     "GHOST": {
         "color": (169, 169, 169),  # 회색
-        "duration": 45,  # 3초
-        "effect": "다른 뱀 통과 가능"
+        "duration": 15,  # 1초
+        "effect": "다른 뱀 통과 가능",
+        "name": "유령화"  # 한글 이름 추가
     }
 }
 
@@ -177,6 +178,11 @@ class Snake:
         self.invincible_time = 0
         self.collision_immune = False
         
+        # Tank 능력 시스템
+        self.tank_immunity_cooldown = 0
+        self.tank_immunity_active = False
+        self.tank_immunity_used = False  # 일회용 면역 사용 여부
+        
         # 스폰 보호
         self.spawn_protection_time = SPAWN_PROTECTION_TIME if is_ai else 0
         
@@ -202,9 +208,7 @@ class Snake:
         # 스탯 시스템
         self.stats = {
             "SPEED": 1,
-            "ENERGY": 1,
-            "STRENGTH": 1,
-            "DEFENSE": 1
+            "ENERGY": 1
         }
         
         # 경험치 시스템
@@ -223,9 +227,9 @@ class Snake:
         if is_ai:
             self.init_ai_attributes()
             
-        # 시뮬레이션 모드 속성
-        if is_ai:
-            self.init_simulation_attributes()
+        # 메시지 시스템 추가
+        self.message = None
+        self.message_duration = 0
 
     def init_evolution_attributes(self):
         """진화 모드 속성 초기화"""
@@ -245,42 +249,6 @@ class Snake:
         self.chase_cooldown = 0
         self.food_detection_range = 50
 
-    def init_simulation_attributes(self):
-        """시뮬레이션 모드 속성 초기화"""
-        # 감정 시스템
-        self.emotion = "NORMAL"
-        self.emotion_timer = 0
-        self.breed_cooldown = 0
-        
-        # 전투 시스템
-        self.strength = random.uniform(20, 30)
-        self.stunned = False
-        self.stun_timer = 0
-        
-        # 기본 AI 특성
-        self.move_delay = 0
-        self.velocity_x = 0
-        self.velocity_y = 0
-        self.vision_range = VISION_RANGE
-        self.vision_angle = VISION_ANGLE
-        
-        # 성별 및 번식
-        self.gender = random.choice(["M", "F"])
-        self.breed_cooldown = 130
-        self.breed_energy_threshold = 50
-        self.birth_count = 0
-        self.max_births = 4 if self.gender == "F" else 0
-        
-        # 에너지 공유
-        self.altruism = random.uniform(0, 10)
-        self.stored_energy = 0
-        self.energy_given_count = 0
-        self.energy_received_count = 0
-        
-        # 성격
-        self.aggression = random.uniform(0.5, 1.5)
-        self.personality = random.choice(["CAUTIOUS", "AGGRESSIVE", "SOCIAL"])
-
     def add_exp(self, amount):
         self.exp += amount
         while self.exp >= self.exp_to_level:
@@ -291,7 +259,9 @@ class Snake:
         self.exp -= self.exp_to_level
         self.exp_to_level = int(self.exp_to_level * 1.5)
         self.evolution_points += 1
-        self.stat_points += 1  # 레벨업 시 1개의 스탯 포인트 획득
+        # 2레벨당 1개의 스탯 포인트 획득
+        if self.level % 2 == 0:
+            self.stat_points += 1
         return self.level
 
     def can_evolve(self):
@@ -312,10 +282,8 @@ class Snake:
             elif new_form == "TANK":
                 self.energy = min(200, self.energy + 50)
                 self.collision_immune = True
-                #tank 효과 변경 -> 충돌면역 to 체력증가? or 충돌면역 유지하되 스태미너 소모 3배?
             elif new_form == "HUNTER":
                 self.food_detection_range = 150
-                #효과 변경됨에 따라 무쓸모 능력대체체
             elif new_form == "ULTIMATE":
                 self.collision_immune = True
                 self.food_detection_range = 200
@@ -478,16 +446,24 @@ class Snake:
             self.invincible_time -= 1
             self.collision_immune = True
         else:
-            # 방어력 스탯과 쉴드 효과 적용
-            shield_active = self.active_effects["SHIELD"] > 0
-            self.collision_immune = (self.evolution_form in ["TANK", "ULTIMATE"] or 
-                                   shield_active or 
-                                   self.stats["DEFENSE"] >= MAX_STAT_LEVEL)
+            # Tank 형태의 면역 상태 처리
+            if self.evolution_form == "TANK":
+                if self.tank_immunity_active:
+                    self.collision_immune = True
+                else:
+                    self.collision_immune = False
+            else:
+                # 다른 형태의 면역 처리 (쉴드 효과나 Ultimate 형태)
+                self.collision_immune = (self.evolution_form == "ULTIMATE" or 
+                                       self.active_effects["SHIELD"] > 0 or 
+                                       self.stats["ENERGY"] >= MAX_STAT_LEVEL)
 
         # 대시 상태 업데이트
         if self.is_dashing:
             self.dash_duration -= 1
-            self.energy -= DASH_ENERGY_COST  # 대시 중 에너지 소모
+            # 보스전일 때 대시 에너지 소모 절반으로 감소
+            dash_energy_cost = DASH_ENERGY_COST * 0.5 if any(isinstance(s, BossSnake) for s in snakes) else DASH_ENERGY_COST
+            self.energy -= dash_energy_cost
             
             if self.dash_duration <= 0 or self.energy <= 0:
                 self.is_dashing = False
@@ -506,13 +482,8 @@ class Snake:
         elif self.energy > max_energy:
             self.energy = max_energy
 
-        # 시뮬레이션 모드에서는 감정 상태 업데이트
-        if simulation_mode:
-            self.update_emotion_state(snakes)
-            
-        if simulation_mode and self.is_ai:
-            self.update_ai_behavior(food_list, snakes)
-        elif self.is_ai:
+        # AI 행동 처리
+        if self.is_ai:
             self.ai_decide_direction(food_list, snakes)
 
         # 회복 시스템 업데이트
@@ -522,42 +493,28 @@ class Snake:
         if self.breed_cooldown > 0:
             self.breed_cooldown -= 1
         
-        # 여분 에너지 저장
-        self.store_extra_energy()
-        
-        # 근처 아군과 에너지 공유
-        if simulation_mode:
-            nearby_snakes = [s for s in snakes if s != self and s.alive and
-                           math.hypot(s.get_head()[0] - self.get_head()[0],
-                                    s.get_head()[1] - self.get_head()[1]) < 100]
-            self.share_energy(nearby_snakes)
-        
         # 이동 처리
         head_x, head_y = self.get_head()
         dx, dy = 0, 0
         
-        if simulation_mode and self.is_ai:
-            # 시뮬레이션 모드의 AI 이동
-            speed = EMOTIONS[self.emotion]["speed_multiplier"] * (2 if self.is_dashing else 1)
-            dx = self.velocity_x * speed
-            dy = self.velocity_y * speed
-        else:
-            # 기존 방식의 이동
-            base_speed = CELL_SIZE * (1 + (self.stats["SPEED"] - 1) * 0.2)  # 스탯당 20% 속도 증가
-            if self.direction == 'UP': dy = -base_speed
-            elif self.direction == 'DOWN': dy = base_speed
-            elif self.direction == 'LEFT': dx = -base_speed
-            elif self.direction == 'RIGHT': dx = base_speed
+        # 기존 방식의 이동
+        base_speed = CELL_SIZE * (1 + (self.stats["SPEED"] - 1) * 0.2)  # 스탯당 20% 속도 증가
+        if self.direction == 'UP': dy = -base_speed
+        elif self.direction == 'DOWN': dy = base_speed
+        elif self.direction == 'LEFT': dx = -base_speed
+        elif self.direction == 'RIGHT': dx = base_speed
 
-            # 대시와 스피드 부스트 효과 적용
-            speed_mult = 1
-            if self.is_dashing:
-                speed_mult *= 2
-            if self.active_effects["SPEED_BOOST"] > 0:
-                speed_mult *= 2
-            
-            dx *= speed_mult
-            dy *= speed_mult
+        # 대시와 스피드 부스트 효과 적용
+        speed_mult = 1
+        if self.is_dashing:
+            speed_mult *= 2
+        if self.active_effects["SPEED_BOOST"] > 0:
+            speed_mult *= 2
+        # 돌진 모드일 때 속도 2배
+        if hasattr(self, 'is_charging') and self.is_charging:
+            speed_mult *= 2
+        dx *= speed_mult
+        dy *= speed_mult
 
         new_head = [head_x + dx, head_y + dy]
 
@@ -574,7 +531,10 @@ class Snake:
         self.body.insert(0, new_head)
         
         # 에너지 소모 (스탯에 따라 감소)
-        base_consume = EMOTIONS[self.emotion]["energy_consume"] * 0.5  # 기본 소모량을 절반으로 감소
+        base_consume = 0.5  # 기본 소모량을 절반으로 감소
+        # 보스전일 때 에너지 소모 절반으로 감소
+        if any(isinstance(s, BossSnake) for s in snakes):
+            base_consume *= 0.5
         energy_efficiency = 1 - (self.stats["ENERGY"] - 1) * 0.15  # 스탯당 15% 에너지 소모 감소
         self.energy -= base_consume * energy_efficiency
 
@@ -582,19 +542,25 @@ class Snake:
         foods_to_remove = []
         for food in food_list:
             food_x, food_y = food.get_pos()
+            # Hunter 형태일 때 흡수 범위 3배 증가
+            absorption_range = CELL_SIZE * 3 if self.evolution_form == "HUNTER" else CELL_SIZE
             distance = math.sqrt((food_x - new_head[0])**2 + (food_y - new_head[1])**2)
             
-            if distance < CELL_SIZE:
+            if distance < absorption_range:
                 foods_to_remove.append(food)
                 if isinstance(food, SpecialItem):
                     self.apply_special_item(food.type)
-                    self.score += 20
-                    self.add_exp(3000)
+                    self.score += 20  # 점수만 획득
                 else:
                     self.boost = 2 if food.is_item else 1
-                    self.energy += 40 if food.is_item else 10
-                    self.score += 10 if food.is_item else 1
-                    self.add_exp(100 if food.is_item else 1000)
+                    if food.is_item:  # 황금 음식
+                        self.energy += 40
+                        self.score += 10
+                        self.add_exp(500)
+                    else:  # 일반 음식
+                        self.energy += 15
+                        self.score += 1
+                        self.add_exp(100)  # 1000에서 100으로 수정
                     self.grow = True
                 break
 
@@ -610,59 +576,14 @@ class Snake:
             self.boost = 1
             self.grow = False
 
-    def update_ai_behavior(self, food_list, snakes):
-        if not food_list:
-            return
-            
-        head_x, head_y = self.get_head()
-        
-        # 가장 가까운 음식 찾기
-        closest_food = None
-        min_dist = float('inf')
-        for food in food_list:
-            dist = math.hypot(food.x - head_x, food.y - head_y)
-            if dist < min_dist and dist < self.vision_range:
-                angle = math.degrees(math.atan2(food.y - head_y, food.x - head_x))
-                if abs(angle_diff(angle, get_angle_from_direction(self.direction))) < self.vision_angle/2:
-                    min_dist = dist
-                    closest_food = food
-
-        # 가장 가까운 위험한 뱀 찾기
-        closest_threat = None
-        min_threat_dist = float('inf')
-        for snake in snakes:
-            if snake != self and snake.alive:
-                threat_x, threat_y = snake.get_head()
-                dist = math.hypot(threat_x - head_x, threat_y - head_y)
-                if dist < min_threat_dist and dist < self.vision_range:
-                    min_threat_dist = dist
-                    closest_threat = snake
-
-        # 행동 결정
-        if closest_threat and min_threat_dist < 50:
-            # 도망가기
-            self.velocity_x = head_x - closest_threat.get_head()[0]
-            self.velocity_y = head_y - closest_threat.get_head()[1]
-            mag = math.hypot(self.velocity_x, self.velocity_y)
-            if mag > 0:
-                self.velocity_x /= mag
-                self.velocity_y /= mag
-        elif closest_food:
-            # 음식을 향해 이동
-            self.velocity_x = closest_food.x - head_x
-            self.velocity_y = closest_food.y - head_y
-            mag = math.hypot(self.velocity_x, self.velocity_y)
-            if mag > 0:
-                self.velocity_x /= mag
-                self.velocity_y /= mag
-        else:
-            # 랜덤한 방향으로 이동
-            if random.random() < 0.02:  # 2% 확률로 방향 변경
-                angle = random.uniform(0, 2 * math.pi)
-                self.velocity_x = math.cos(angle)
-                self.velocity_y = math.sin(angle)
+        # 돌진 모드 타이머 관리(중복 방지)
+        if hasattr(self, 'is_charging') and self.is_charging:
+            self.charge_timer -= 1
+            if self.charge_timer <= 0:
+                self.is_charging = False
 
     def ai_decide_direction(self, food_list, snakes):
+        """AI의 방향 결정"""
         if not self.alive:
             return
 
@@ -766,12 +687,61 @@ class Snake:
         """특수 아이템 효과 적용"""
         if item_type in SPECIAL_ITEMS:
             self.active_effects[item_type] = SPECIAL_ITEMS[item_type]["duration"]
-            
+            # SHIELD 아이템은 완전 면역 효과 부여
+            if item_type == "SHIELD":
+                self.collision_immune = True
+            # 메시지 설정
+            self.message = f"{self.name}이(가) {SPECIAL_ITEMS[item_type]['name']}을(를) 섭취하였습니다!"
+            self.message_duration = 45  # 3초간 표시 (15fps * 3)
+
     def update_effects(self):
         """특수 아이템 효과 업데이트"""
+        # 기존 효과 업데이트
         for effect in self.active_effects:
             if self.active_effects[effect] > 0:
                 self.active_effects[effect] -= 1
+                # SHIELD 효과가 끝나면 면역 해제
+                if effect == "SHIELD" and self.active_effects[effect] == 0:
+                    self.collision_immune = False
+        
+        # Tank 면역 쿨다운 업데이트
+        if self.tank_immunity_cooldown > 0:
+            self.tank_immunity_cooldown -= 1
+            if self.tank_immunity_cooldown <= 0:
+                self.tank_immunity_used = False  # 쿨다운이 끝나면 다시 사용 가능
+
+    def activate_tank_immunity(self):
+        """Tank 형태의 일회용 피해 면역 능력을 활성화"""
+        if (self.evolution_form == "TANK" and 
+            self.tank_immunity_cooldown <= 0 and 
+            not self.tank_immunity_used):
+            self.tank_immunity_active = True
+            self.tank_immunity_used = True
+            self.tank_immunity_cooldown = 300  # 20초 (15fps * 20)
+            self.collision_immune = True
+            # 메시지 설정
+            self.message = "일회용 피해 면역이 활성화되었습니다!"
+            self.message_duration = 45  # 3초간 표시
+            return True
+        return False
+
+    def handle_collision(self, other):
+        """충돌 처리 시 Tank의 일회용 면역 해제"""
+        if self.tank_immunity_active:
+            self.tank_immunity_active = False
+            self.collision_immune = False
+            # 메시지 설정
+            self.message = "일회용 피해 면역이 소모되었습니다!"
+            self.message_duration = 45  # 3초간 표시
+            return True  # 충돌 무시
+        return False  # 일반 충돌 처리
+
+    def update_message(self):
+        """메시지 업데이트"""
+        if self.message_duration > 0:
+            self.message_duration -= 1
+            if self.message_duration <= 0:
+                self.message = None
 
 #############################################
 # 진화 모드 클래스
@@ -872,21 +842,59 @@ def draw_energy_bar(screen, snake):
     bar_width = 200
     height = 15
     x, y = 20, 10
-    pygame.draw.rect(screen, WHITE, (x-2, y-2, bar_width+4, height+4), 1)
+    
+    # 뱀의 머리 위치 확인
+    head_x, head_y = snake.get_head()
+    text_area = pygame.Rect(x, y, bar_width + 100, height + 30)  # 텍스트 영역
+    is_snake_near = text_area.collidepoint(head_x, head_y)
+    
+    # 알파값 설정 (뱀이 가까이 있으면 255, 아니면 128)
+    alpha = 255 if is_snake_near else 128
+    
+    # 에너지 바 배경
+    pygame.draw.rect(screen, (WHITE[0], WHITE[1], WHITE[2], alpha), (x-2, y-2, bar_width+4, height+4), 1)
     fill = min(bar_width, max(0, int((snake.energy / 150) * bar_width)))
-    pygame.draw.rect(screen, RED, (x, y, fill, height))
+    
+    # 에너지 바 채우기
+    energy_surface = pygame.Surface((fill, height), pygame.SRCALPHA)
+    energy_surface.fill((RED[0], RED[1], RED[2], alpha))
+    screen.blit(energy_surface, (x, y))
+    
+    # 텍스트 렌더링
     font = pygame.font.SysFont(None, 24)
-    txt = font.render(f"Energy: {int(snake.energy)}", True, WHITE)
+    txt = font.render(f"Energy: {int(snake.energy)}", True, (WHITE[0], WHITE[1], WHITE[2], alpha))
     screen.blit(txt, (x, y + height + 4))
 
 def draw_leaderboard(screen, snakes):
     font = pygame.font.SysFont(None, 24)
     sorted_snakes = sorted([s for s in snakes if s.alive], key=lambda s: s.score, reverse=True)
-    title = font.render("Live Leaderboard:", True, GRAY)
-    screen.blit(title, (WIDTH - 220, 10))
+    
+    # 리더보드 영역 정의
+    x, y = WIDTH - 220, 10
+    height_per_entry = 25
+    total_height = 40 + len(sorted_snakes[:5]) * height_per_entry
+    
+    # 뱀들의 머리 위치 확인
+    any_snake_near = False
+    leaderboard_area = pygame.Rect(x, y, 220, total_height)
+    for snake in snakes:
+        if snake.alive:
+            head_x, head_y = snake.get_head()
+            if leaderboard_area.collidepoint(head_x, head_y):
+                any_snake_near = True
+                break
+    
+    # 알파값 설정
+    alpha = 255 if any_snake_near else 128
+    
+    # 제목 렌더링
+    title = font.render("Live Leaderboard:", True, (GRAY[0], GRAY[1], GRAY[2], alpha))
+    screen.blit(title, (x, y))
+    
+    # 순위 렌더링
     for i, s in enumerate(sorted_snakes[:5]):
-        text = font.render(f"{i+1}. {s.name} - {s.score}", True, GRAY)
-        screen.blit(text, (WIDTH - 220, 40 + i * 25))
+        text = font.render(f"{i+1}. {s.name} - {s.score}", True, (GRAY[0], GRAY[1], GRAY[2], alpha))
+        screen.blit(text, (x, 40 + i * height_per_entry))
 
 def draw_vision_cone(screen, x, y, angle, fov, dist, color=(255, 0, 0, 50)):
     """시야 원뿔을 그리는 함수
@@ -932,12 +940,15 @@ def draw_snake(screen, snake, show_emotion=False):
     if not snake.alive:
         return
         
-    # 무적 상태일 때 반짝이는 효과
-    if snake.collision_immune:
+    # 깜빡이는 효과는 Tank의 일회용 면역이 활성화되었을 때만 적용
+    if snake.evolution_form == "TANK" and snake.tank_immunity_active:
         if pygame.time.get_ticks() % 200 < 100:  # 깜빡이는 효과
             alpha = 128
         else:
             alpha = 255
+    # 다른 무적 상태에서는 반투명 효과만 적용
+    elif snake.collision_immune:
+        alpha = 180
     else:
         alpha = 255
     
@@ -964,38 +975,37 @@ def handle_collisions(snakes):
     for snake in snakes:
         if not snake.alive:
             continue
-            
         head_x, head_y = snake.get_head()
-        
-        # 다른 뱀들과의 충돌 체크
         for other in snakes:
             if not other.alive or snake == other:
                 continue
-                
-            # 머리끼리 충돌한 경우
+            # 보스(BossSnake)는 일반 충돌로 죽지 않음
+            if isinstance(snake, BossSnake) or isinstance(other, BossSnake):
+                continue
+            # 머리끼리 충돌
             other_head_x, other_head_y = other.get_head()
             head_distance = math.sqrt((head_x - other_head_x)**2 + (head_y - other_head_y)**2)
-            
             if head_distance < CELL_SIZE:
-                # 두 뱀 모두 죽음
-                if not snake.collision_immune:
+                snake_immune = snake.handle_collision(other) if snake.tank_immunity_active else snake.collision_immune
+                other_immune = other.handle_collision(snake) if other.tank_immunity_active else other.collision_immune
+                if not snake_immune:
                     snake.alive = False
-                if not other.collision_immune:
+                if not other_immune:
                     other.alive = False
                 continue
-            
-            # 다른 뱀의 몸통과 충돌
-            for segment in other.body[1:]:  # 머리 제외한 몸통
+            # 몸통 충돌
+            for segment in other.body[1:]:
                 segment_x, segment_y = segment
                 distance = math.sqrt((head_x - segment_x)**2 + (head_y - segment_y)**2)
-                
                 if distance < CELL_SIZE:
-                    if not snake.collision_immune:  # 충돌 면역이 없으면 죽음
+                    if snake.tank_immunity_active:
+                        snake.handle_collision(other)
+                        break
+                    elif not snake.collision_immune:
                         snake.alive = False
-                        # 충돌한 뱀이 플레이어면 점수 획득
                         if not other.is_ai:
                             other.score += 50
-                            other.add_exp(300)  # 플레이어가 AI를 죽이면 추가 경험치
+                            other.add_exp(300)
                     break
 
 def save_score(name, score):
@@ -1081,20 +1091,27 @@ def draw_stats(screen, snake):
     stats_text = [
         f"스탯 포인트: {snake.stat_points}",
         f"이동속도: {snake.stats['SPEED']}/{MAX_STAT_LEVEL}",
-        f"에너지: {snake.stats['ENERGY']}/{MAX_STAT_LEVEL}",
-        f"공격력: {snake.stats['STRENGTH']}/{MAX_STAT_LEVEL}",
-        f"방어력: {snake.stats['DEFENSE']}/{MAX_STAT_LEVEL}"
+        f"에너지: {snake.stats['ENERGY']}/{MAX_STAT_LEVEL}"
     ]
+    
+    # 뱀의 머리 위치 확인
+    head_x, head_y = snake.get_head()
+    stats_area = pygame.Rect(x-10, y-10, 200, len(stats_text) * 25 + 10)
+    is_snake_near = stats_area.collidepoint(head_x, head_y)
+    
+    # 알파값 설정
+    alpha = 255 if is_snake_near else 128
     
     # 배경 패널
     panel_height = len(stats_text) * 25 + 10
-    pygame.draw.rect(screen, (0, 0, 0, 128), 
-                    (x-10, y-10, 200, panel_height))
+    panel_surface = pygame.Surface((200, panel_height), pygame.SRCALPHA)
+    panel_surface.fill((0, 0, 0, alpha//2))  # 배경은 더 투명하게
+    screen.blit(panel_surface, (x-10, y-10))
     
     # 스탯 텍스트
     for i, text in enumerate(stats_text):
-        surf = font.render(text, True, WHITE)
-        screen.blit(surf, (x, y + i * 25))
+        text_surface = font.render(text, True, (WHITE[0], WHITE[1], WHITE[2], alpha))
+        screen.blit(text_surface, (x, y + i * 25))
         
     # 활성 효과 표시
     if any(snake.active_effects.values()):
@@ -1105,11 +1122,13 @@ def draw_stats(screen, snake):
                 effects_text.append(f"{effect}: {duration//15+1}초")
         
         if effects_text:
-            pygame.draw.rect(screen, (0, 0, 0, 128), 
-                           (x-10, y-10, 200, len(effects_text) * 25 + 10))
+            effects_panel = pygame.Surface((200, len(effects_text) * 25 + 10), pygame.SRCALPHA)
+            effects_panel.fill((0, 0, 0, alpha//2))
+            screen.blit(effects_panel, (x-10, y-10))
+            
             for i, text in enumerate(effects_text):
-                surf = font.render(text, True, WHITE)
-                screen.blit(surf, (x, y + i * 25))
+                effect_text = font.render(text, True, (WHITE[0], WHITE[1], WHITE[2], alpha))
+                screen.blit(effect_text, (x, y + i * 25))
 
 def spawn_special_item(food_list, snakes):
     """특수 아이템 생성"""
@@ -1126,10 +1145,21 @@ def draw_game_ui(screen, player, snakes, game_mode, food_list=None):
     draw_leaderboard(screen, snakes)
     draw_energy_bar(screen, player)
     
+    # 메시지 표시
+    for snake in snakes:
+        if snake.message and snake.message_duration > 0:
+            font = pygame.font.SysFont("malgun gothic", 24)
+            text = font.render(snake.message, True, YELLOW)
+            # 화면 중앙 상단에 메시지 표시
+            x = (WIDTH - text.get_width()) // 2
+            y = 50
+            screen.blit(text, (x, y))
+            snake.update_message()
+    
     # 진화 모드 UI
     if game_mode == "EVOLUTION":
         draw_stats(screen, player)
-        if food_list is not None:  # food_list가 제공된 경우에만 미니맵 그리기
+        if food_list is not None:
             draw_minimap(screen, snakes, food_list)
         draw_status_ui(screen, player)
         if player.dash_cooldown > 0:
@@ -1145,35 +1175,551 @@ def draw_game_ui(screen, player, snakes, game_mode, food_list=None):
             screen.blit(cooldown_text, (20, 60))
 
 def draw_status_ui(screen, snake):
-    """
-    플레이어의 상태 UI를 화면에 표시하는 함수
-    
-    매개변수:
-        screen: pygame.Surface - 게임 화면
-        snake: Snake - 상태를 표시할 뱀 객체
-        
-    기능:
-        - 레벨과 경험치 정보 표시
-        - 현재 진화 형태 표시
-        - 경험치 바 시각화
-    """
-    # 상태 UI 배경
+    """플레이어의 상태 UI를 화면에 표시하는 함수"""
+    # 상태 UI 영역 정의
     status_width = 200
-    pygame.draw.rect(screen, (0, 0, 0, 128), (20, 80, status_width, 100))
+    x, y = 20, 80
     
-    # 레벨과 경험치 표시
+    # 뱀의 머리 위치 확인
+    head_x, head_y = snake.get_head()
+    status_area = pygame.Rect(x, y, status_width, 100)
+    is_snake_near = status_area.collidepoint(head_x, head_y)
+    
+    # 알파값 설정
+    alpha = 255 if is_snake_near else 128
+    
+    # 상태 UI 배경
+    background = pygame.Surface((status_width, 100), pygame.SRCALPHA)
+    background.fill((0, 0, 0, alpha//2))
+    screen.blit(background, (x, y))
+    
+    # 폰트 설정
     font = pygame.font.SysFont("malgun gothic", 20)
-    level_text = font.render(f"Level: {snake.level}", True, WHITE)
-    exp_text = font.render(f"EXP: {snake.exp}/{snake.exp_to_level}", True, WHITE)
-    form_text = font.render(f"Form: {snake.evolution_form}", True, 
-                           EVOLUTION_FORMS[snake.evolution_form]["color"])
     
-    screen.blit(level_text, (30, 90))
-    screen.blit(exp_text, (30, 115))
-    screen.blit(form_text, (30, 140))
+    # 텍스트 렌더링
+    level_text = font.render(f"Level: {snake.level}", True, (WHITE[0], WHITE[1], WHITE[2], alpha))
+    exp_text = font.render(f"EXP: {snake.exp}/{snake.exp_to_level}", True, (WHITE[0], WHITE[1], WHITE[2], alpha))
+    
+    # 진화 형태 색상에 알파값 적용
+    form_color = EVOLUTION_FORMS[snake.evolution_form]["color"]
+    form_color_with_alpha = (form_color[0], form_color[1], form_color[2], alpha)
+    form_text = font.render(f"Form: {snake.evolution_form}", True, form_color_with_alpha)
+    
+    # 텍스트 배치
+    screen.blit(level_text, (x + 10, y + 10))
+    screen.blit(exp_text, (x + 10, y + 35))
+    screen.blit(form_text, (x + 10, y + 60))
     
     # 경험치 바
     exp_ratio = snake.exp / snake.exp_to_level
-    pygame.draw.rect(screen, (50, 50, 50), (30, 165, status_width - 20, 5))
-    pygame.draw.rect(screen, (0, 255, 0), 
-                    (30, 165, (status_width - 20) * exp_ratio, 5))
+    bar_surface = pygame.Surface((status_width - 20, 5), pygame.SRCALPHA)
+    pygame.draw.rect(bar_surface, (50, 50, 50, alpha), (0, 0, status_width - 20, 5))
+    pygame.draw.rect(bar_surface, (0, 255, 0, alpha), (0, 0, (status_width - 20) * exp_ratio, 5))
+    screen.blit(bar_surface, (x + 10, y + 85))
+
+def update_items(food_list, snakes, item_timer, special_item_timer):
+    """
+    아이템 생성을 관리하는 함수
+    
+    매개변수:
+        food_list: list - 게임 내 모든 음식/아이템 목록
+        snakes: list - 게임 내 모든 뱀 목록
+        item_timer: int - 일반 아이템 생성 타이머
+        special_item_timer: int - 특수 아이템 생성 타이머
+        
+    기능:
+        - 일정 시간마다 일반 아이템 생성
+        - 일정 시간마다 특수 아이템 생성
+    """
+    if item_timer >= 75:  # 5초 (15fps * 5)
+        spawn_food(food_list, snakes, is_item=True)
+        item_timer = 0
+        
+    if special_item_timer >= 225:  # 15초 (15fps * 15)
+        spawn_special_item(food_list, snakes)
+        special_item_timer = 0
+
+# =========================================
+# 보스전 시스템 (Boss Battle System)
+# =========================================
+
+# 보스전 상수
+BOSS_EVOLUTION_TIME = {
+    "PHASE2": 180,  # 3분 (15fps * 180)
+    "PHASE3": 360   # 6분 (15fps * 360) - 최종 페이즈
+}
+
+BOSS_PATTERNS = {
+    "NORMAL": {
+        "color": PURPLE,
+        "speed": 1.0,
+        "damage": 1.0,
+        "description": "기본 상태"
+    },
+    "EVOLVED1": {
+        "color": RED,
+        "speed": 1.2,
+        "damage": 1.3,
+        "description": "1차 진화 - 속도 증가"
+    },
+    "EVOLVED2": {
+        "color": ORANGE,
+        "speed": 1.4,
+        "damage": 1.6,
+        "description": "최종 진화"
+    }
+}
+
+class Projectile:
+    """보스의 투사체 클래스"""
+    def __init__(self, x, y, target_x, target_y, speed=5, is_circular=False):
+        self.x = float(x)
+        self.y = float(y)
+        if is_circular:
+            # 방향 벡터를 그대로 사용 (원형 탄막용)
+            self.dx = target_x * speed
+            self.dy = target_y * speed
+        else:
+            # 목표 지점을 향한 방향 벡터 계산
+            dx = target_x - x
+            dy = target_y - y
+            # 방향 벡터 정규화
+            length = math.sqrt(dx * dx + dy * dy)
+            self.dx = (dx / length) * speed if length > 0 else 0
+            self.dy = (dy / length) * speed if length > 0 else 0
+        self.speed = speed
+        self.size = CELL_SIZE
+        self.alive = True
+        self.color = ORANGE if is_circular else RED
+
+    def move(self):
+        """투사체 이동"""
+        self.x += self.dx
+        self.y += self.dy
+        
+        # 화면 밖으로 나가면 제거
+        if (self.x < 0 or self.x > WIDTH or 
+            self.y < 0 or self.y > HEIGHT):
+            self.alive = False
+
+class BossSnake(Snake):
+    """보스 스네이크 클래스"""
+    def __init__(self, x, y):
+        super().__init__(x, y, color=PURPLE, name="BOSS", is_ai=True)
+        self.init_boss_attributes()
+        # 경고음 관련 속성 추가
+        self.warning_sound = pygame.mixer.Sound("warning_sound.mp3")
+        self.warning_duration = None  # 경고음 길이 (밀리초)
+        self.warning_start_time = 0  # 경고음 시작 시간
+        self.is_warning = False  # 경고음 재생 중 여부
+        # 전체 공격 관련 속성 추가
+        self.safe_zone = None  # (x, y, width, height)
+        self.is_global_attack = False  # 전체 공격 상태
+        self.global_attack_damage = 0  # 전체 공격 데미지
+        self.global_attack_timer = 0  # 전체 공격 타이머
+
+    def init_boss_attributes(self):
+        """보스 속성 초기화"""
+        # 기본 스탯
+        self.max_health = 200
+        self.health = self.max_health
+        self.phase = 1
+        self.pattern = "NORMAL"
+        self.survival_time = 0  # 생존 시간 카운터
+        
+        # 공격 관련
+        self.attack_cooldown = 0
+        self.dash_cooldown = 0
+        self.current_attack = None
+        self.projectile_cooldown = 75  # 5초 (15fps * 5)
+        self.projectiles = []  # 투사체 리스트
+        self.circular_shot_count = 8  # 기본 원형 탄막 발사 수
+        self.enhanced_circular_mode = False  # 강화된 원형 탄막 모드
+        self.enhanced_shot_count = 16  # 강화된 원형 탄막 발사 수
+        self.burst_count = 0  # 연속 발사 카운터
+        self.max_bursts = 3  # 최대 연속 발사 횟수
+        
+        # 크기 증가
+        self.size_multiplier = 2
+        self.body = [[self.body[0][0], self.body[0][1]]]  # 초기 크기는 1로 시작
+        self.body.append([self.body[0][0] - CELL_SIZE, self.body[0][1]])
+        self.body.append([self.body[0][0] - CELL_SIZE * 2, self.body[0][1]])
+        
+        # 무한 스태미나
+        self.energy = float('inf')
+        
+        # 이동 관련
+        self.move_delay = 0
+
+    def update_boss_state(self, player):
+        """보스 상태 업데이트"""
+        if not self.alive:
+            return
+
+        # 생존 시간 증가
+        self.survival_time += 1
+        
+        # 체력 기반 강제 진화
+        health_ratio = self.health / self.max_health
+        if health_ratio <= 0.3 and self.phase < 3:  # 체력 30% 이하면 3페이즈
+            self.evolve_boss(3, player)
+            self.message = "보스가 위험 상태에서 최종 형태로 강제 진화했습니다!"
+            self.message_duration = 60
+        elif health_ratio <= 0.6 and self.phase < 2:  # 체력 60% 이하면 2페이즈
+            self.evolve_boss(2, player)
+            self.message = "보스가 위험 상태에서 2페이즈로 강제 진화했습니다!"
+            self.message_duration = 60
+        # 시간에 따른 진화 (체력 기반 진화가 되지 않았을 경우)
+        elif self.survival_time >= BOSS_EVOLUTION_TIME["PHASE3"] and self.phase < 3:
+            self.evolve_boss(3, player)
+            # 3페이즈 진입 3초 후 강화 모드 활성화
+            if self.survival_time == BOSS_EVOLUTION_TIME["PHASE3"] + 45:  # 3초 = 45틱
+                self.enhanced_circular_mode = True
+                self.message = "보스의 전체 공격이 더욱 강화되었습니다!"
+                self.message_duration = 60
+        elif self.survival_time >= BOSS_EVOLUTION_TIME["PHASE2"] and self.phase < 2:
+            self.evolve_boss(2, player)
+        
+        # 쿨다운 감소
+        if self.attack_cooldown > 0:
+            self.attack_cooldown -= 1
+        if self.dash_cooldown > 0:
+            self.dash_cooldown -= 1
+            
+        # 투사체 발사
+        if self.projectile_cooldown > 0:
+            self.projectile_cooldown -= 1
+        else:
+            if self.phase == 1:  # 1페이즈: 5초마다 단일 투사체
+                self.shoot_projectile(player)
+                self.projectile_cooldown = 75  # 5초
+            elif self.phase == 2:  # 2페이즈: 3초마다 2발씩 발사
+                self.shoot_projectile(player)
+                self.shoot_projectile(player)
+                self.projectile_cooldown = 45  # 3초
+            elif self.phase >= 3:  # 3페이즈: 원형 탄막 + 전체 공격
+                self.shoot_projectile(player)  # 원형 탄막 발사
+                if self.burst_count >= self.max_bursts:
+                    self.projectile_cooldown = 45  # 3초 후 다음 3연발
+                    self.burst_count = 0
+                else:
+                    self.projectile_cooldown = 5  # 연속 발사 간격
+                    self.burst_count += 1
+            
+            # 60초마다 전체 공격
+            if self.phase >= 3 and self.survival_time % 9999999999999 == 0:  # 사실상 발동 불가능한 시간으로 설정
+                self.start_global_attack(player)
+        
+        # 전체 공격 처리
+        if self.is_warning:
+            current_time = pygame.time.get_ticks()
+            if current_time - self.warning_start_time >= self.warning_duration:
+                self.is_warning = False
+                self.is_global_attack = True
+                self.global_attack_timer = 30  # 2초간 공격 지속
+                self.message = "전체 공격 개시!"
+                self.message_duration = 30
+        
+        if self.is_global_attack:
+            self.global_attack_timer -= 1
+            if self.global_attack_timer <= 0:
+                self.is_global_attack = False
+                self.safe_zone = None
+
+    def play_warning(self):
+        """경고음 재생 및 관련 상태 설정"""
+        if not self.is_warning:
+            self.warning_sound.play()
+            self.warning_duration = int(self.warning_sound.get_length() * 1000)  # 밀리초 단위로 변환
+            self.warning_start_time = pygame.time.get_ticks()
+            self.is_warning = True
+
+    def start_global_attack(self, player):
+        """전체 공격 시작"""
+        if not self.is_warning and not self.is_global_attack:
+            self.play_warning()
+            # 안전 구역 생성 (화면의 1/6 크기)
+            safe_width = WIDTH // 6
+            safe_height = HEIGHT // 6
+            # 랜덤한 위치에 안전 구역 생성
+            safe_x = random.randint(0, WIDTH - safe_width)
+            safe_y = random.randint(0, HEIGHT - safe_height)
+            self.safe_zone = (safe_x, safe_y, safe_width, safe_height)
+            self.global_attack_damage = 10 if self.phase == 3 else 5
+            self.message = "전체 공격 준비 중! 안전 구역으로 이동하세요!"
+            self.message_duration = 60
+
+    def shoot_projectile(self, player):
+        """투사체 발사 - 플레이어를 향해"""
+        if not player.alive:
+            return
+        head_x, head_y = self.get_head()
+        
+        if self.phase <= 2:
+            # 1,2페이즈: 플레이어 추적 투사체
+            player_x, player_y = player.get_head()
+            self.projectiles.append(Projectile(head_x, head_y, player_x, player_y, speed=3 + self.phase))
+        else:
+            # 3페이즈: 회전하는 원형 탄막
+            shot_count = self.enhanced_shot_count if self.enhanced_circular_mode else self.circular_shot_count
+            base_rotation = (2 * math.pi * self.burst_count) / self.max_bursts  # 기본 회전 각도
+            
+            for i in range(shot_count):
+                angle = (2 * math.pi * i) / shot_count + base_rotation  # 기본 회전 각도 추가
+                dx = math.cos(angle)
+                dy = math.sin(angle)
+                self.projectiles.append(Projectile(head_x, head_y, dx, dy, speed=4, is_circular=True))
+
+    def update_projectiles(self):
+        """투사체 업데이트"""
+        for projectile in self.projectiles[:]:  # 리스트 복사본으로 반복
+            projectile.move()
+            if not projectile.alive:
+                self.projectiles.remove(projectile)
+
+    def evolve_boss(self, new_phase, player=None):
+        """보스 진화"""
+        self.phase = new_phase
+        if new_phase == 2:
+            self.pattern = "EVOLVED1"
+            self.size_multiplier = 2.2
+            self.message = "보스가 2페이즈로 진화했습니다! 더 빠르게 추적합니다!"
+            # 2페이즈 진입 시 대시 관련 변수 초기화
+            self.is_dashing = False
+            self.dash_duration = 0
+            self.dash_cooldown = 0
+            # 페이즈2 진입 시 플레이어 길이의 2배로 맞춤(최소 3)
+            if player is not None:
+                target_len = max(3, int(len(player.body) * 2))
+                if len(self.body) < target_len:
+                    while len(self.body) < target_len:
+                        self.body.append(self.body[-1][:])
+                elif len(self.body) > target_len:
+                    self.body = self.body[:target_len]
+        elif new_phase == 3:
+            self.pattern = "EVOLVED2"
+            self.size_multiplier = 2.5
+            self.message = "보스가 최종 형태에 도달했습니다! 원형 탄막과 대시 능력 사용 시작작!"
+            # 3페이즈 진입 시 경고음 재생
+            self.warning_sound.play()
+            # 페이즈3 진입 시 플레이어 길이의 4배로 맞춤(최소 3)
+            if player is not None:
+                target_len = max(3, int(len(player.body) * 4))
+                if len(self.body) < target_len:
+                    while len(self.body) < target_len:
+                        self.body.append(self.body[-1][:])
+                elif len(self.body) > target_len:
+                    self.body = self.body[:target_len]
+        # 진화 시 몸 크기 조정 메시지
+        self.body = [[x, y] for x, y in self.body]
+        self.message_duration = 60
+
+    def boss_ai_behavior(self, player, food_list):
+        """보스 AI 행동 결정"""
+        if not self.alive or not player.alive:
+            return
+
+        # 페이즈1에서는 모드2 AI(추적/대시 등) 사용
+        if self.phase == 1:
+            self.ai_decide_direction(food_list, [player, self])
+            return
+
+        # 페이즈2: 플레이어를 먹이로 인식, 더 공격적으로 추적 (대시 없음)
+        if self.phase == 2:
+            head_x, head_y = self.get_head()
+            player_x, player_y = player.get_head()
+            distance_to_player = math.hypot(player_x - head_x, player_y - head_y)
+            PLAYER_CHASE_RANGE = 300  # 추적 범위 증가
+            
+            # 플레이어가 가까우면 무조건 추적
+            if distance_to_player < PLAYER_CHASE_RANGE:
+                # 플레이어 방향으로 이동
+                if abs(player_x - head_x) > abs(player_y - head_y):
+                    if player_x > head_x:
+                        self.direction = 'RIGHT'
+                    else:
+                        self.direction = 'LEFT'
+                else:
+                    if player_y > head_y:
+                        self.direction = 'DOWN'
+                    else:
+                        self.direction = 'UP'
+            return
+
+        # 페이즈3: 매우 공격적인 AI
+        if self.phase == 3:
+            head_x, head_y = self.get_head()
+            player_x, player_y = player.get_head()
+            distance_to_player = math.hypot(player_x - head_x, player_y - head_y)
+            AGGRESSIVE_CHASE_RANGE = 400  # 더 넓은 추적 범위
+            AGGRESSIVE_DASH_RANGE = 150  # 더 넓은 대시 범위
+            
+            # 항상 플레이어 추적
+            if abs(player_x - head_x) > abs(player_y - head_y):
+                if player_x > head_x:
+                    self.direction = 'RIGHT'
+                else:
+                    self.direction = 'LEFT'
+            else:
+                if player_y > head_y:
+                    self.direction = 'DOWN'
+                else:
+                    self.direction = 'UP'
+            
+            # 더 자주 대시 사용
+            if distance_to_player < AGGRESSIVE_DASH_RANGE and not self.is_dashing and self.dash_cooldown <= 0:
+                self.is_dashing = True
+                self.dash_duration = 45  # 대시 지속시간 증가(3초)
+                self.dash_cooldown = 30  # 더 짧은 쿨타임(2초)
+
+    def move(self, food_list, snakes, tick):
+        """보스 이동 처리"""
+        if self.move_delay > 0:
+            self.move_delay -= 1
+            return
+            
+        # 다음 위치 계산
+        head_x, head_y = self.get_head()
+        next_x, next_y = head_x, head_y
+        
+        # 2페이즈일 때 속도 절반으로 감소
+        base_speed = CELL_SIZE * (1.5 if self.is_dashing else 1)
+        if self.phase == 2:
+            base_speed *= 0.5
+            
+        if self.direction == 'RIGHT': next_x += base_speed
+        elif self.direction == 'LEFT': next_x -= base_speed
+        elif self.direction == 'DOWN': next_y += base_speed
+        elif self.direction == 'UP': next_y -= base_speed
+        
+        # 벽 충돌 방지
+        next_x = max(0, min(next_x, WIDTH - CELL_SIZE))
+        next_y = max(0, min(next_y, HEIGHT - CELL_SIZE))
+        
+        # 새로운 머리 위치 추가
+        self.body.insert(0, [next_x, next_y])
+        
+        # 음식 충돌 체크
+        foods_to_remove = []
+        for food in food_list:
+            food_x, food_y = food.get_pos()
+            distance = math.sqrt((food_x - next_x)**2 + (food_y - next_y)**2)
+            
+            if distance < CELL_SIZE * self.size_multiplier:
+                foods_to_remove.append(food)
+                if self.phase == 1:  # 1페이즈에서만 성장
+                    # 일반 음식은 1, 황금 음식은 2만큼 성장
+                    growth = 2 if food.is_item else 1
+                    for _ in range(growth):
+                        self.body.append(self.body[-1][:])
+                break
+        
+        # 음식 제거
+        for food in foods_to_remove:
+            if food in food_list:
+                food_list.remove(food)
+        
+        if not foods_to_remove:  # 음식을 먹지 않았을 때만 꼬리 제거
+            self.body.pop()
+        
+        # 무한 스태미나 유지
+        self.energy = float('inf')
+        
+        # 2페이즈일 때 이동 후 딜레이 추가
+        if self.phase == 2:
+            self.move_delay = 1  # 1틱 대기
+
+def handle_boss_collision(boss, player):
+    """보스 충돌 처리"""
+    if not boss.alive or not player.alive:
+        return
+    head_x, head_y = boss.get_head()
+    player_x, player_y = player.get_head()
+    
+    # 전체 공격 데미지 처리
+    if boss.is_global_attack:
+        if boss.safe_zone:
+            safe_x, safe_y, safe_width, safe_height = boss.safe_zone
+            # 플레이어가 안전 구역 밖에 있으면 데미지
+            if not (safe_x <= player_x <= safe_x + safe_width and 
+                   safe_y <= player_y <= safe_y + safe_height):
+                player.alive = False
+                player.message = "전체 공격에 당했습니다!"
+                player.message_duration = 60
+                return
+    
+    # 투사체와 플레이어 충돌 체크
+    for projectile in boss.projectiles[:]:
+        distance = math.hypot(projectile.x - player_x, projectile.y - player_y)
+        if distance < CELL_SIZE:
+            player.alive = False
+            player.message = "보스의 투사체에 맞았습니다!"
+            player.message_duration = 60
+            boss.projectiles.remove(projectile)
+            return
+    
+    # 플레이어와 보스 충돌
+    distance = math.hypot(player_x - head_x, player_y - head_y)
+    if distance < CELL_SIZE * boss.size_multiplier:
+        # 돌진 모드일 때만 보스에게 데미지
+        if getattr(player, 'is_charging', False):
+            prev_health = boss.health  # 이전 체력 저장
+            boss.health -= 10 
+            player.message = f"보스에게 10 데미지! (체력: {prev_health} -> {boss.health})"
+            player.message_duration = 45
+            if boss.health <= 0:
+                boss.alive = False
+                boss.message = "보스가 쓰러졌습니다!"
+                boss.message_duration = 60
+        else:
+            # 돌진이 아니면 플레이어 즉사
+            player.alive = False
+            player.message = "보스에게 부딪혀 사망!"
+            player.message_duration = 60
+
+def draw_boss_ui(screen, boss, player):
+    """보스 UI 그리기"""
+    # 보스 체력바
+    bar_width = 400
+    height = 20
+    x = (WIDTH - bar_width) // 2
+    y = 20
+    
+    # 체력바 배경
+    pygame.draw.rect(screen, (50, 50, 50), (x-2, y-2, bar_width+4, height+4))
+    
+    # 체력바
+    health_ratio = boss.health / boss.max_health
+    health_width = int(bar_width * health_ratio)
+    health_color = BOSS_PATTERNS[boss.pattern]["color"]
+    pygame.draw.rect(screen, health_color, (x, y, health_width, height))
+    
+    # 보스 정보
+    font = pygame.font.SysFont("malgun gothic", 20)
+    phase_text = font.render(f"Phase {boss.phase}", True, WHITE)
+    pattern_text = font.render(f"Pattern: {boss.pattern}", True, BOSS_PATTERNS[boss.pattern]["color"])
+    
+    screen.blit(phase_text, (x, y + height + 5))
+    screen.blit(pattern_text, (x + 100, y + height + 5))
+    
+    # 생존 시간
+    time_text = font.render(f"Time: {boss.survival_time//15}s", True, WHITE)
+    screen.blit(time_text, (x + 250, y + height + 5))
+    
+    # 투사체 그리기
+    for projectile in boss.projectiles:
+        pygame.draw.rect(screen, projectile.color, 
+                        (projectile.x, projectile.y, projectile.size, projectile.size))    
+    # 안전 구역 그리기
+    if boss.safe_zone:
+        safe_x, safe_y, safe_width, safe_height = boss.safe_zone
+        if boss.is_warning:  # 경고 중에는 초록색
+            safe_color = (0, 255, 0, 128)
+        else:  # 공격 중에는 파란색
+            safe_color = (0, 0, 255, 128)
+        safe_surface = pygame.Surface((safe_width, safe_height), pygame.SRCALPHA)
+        safe_surface.fill(safe_color)
+        screen.blit(safe_surface, (safe_x, safe_y))
+        # 테두리 그리기
+        pygame.draw.rect(screen, (255, 255, 255), 
+                        (safe_x, safe_y, safe_width, safe_height), 2)
