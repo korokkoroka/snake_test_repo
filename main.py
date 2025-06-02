@@ -208,6 +208,9 @@ def mode_select_screen():
                     selected_index = (selected_index + 1) % len(modes)
                 elif event.key == pygame.K_RETURN:
                     return modes[selected_index]["mode"]
+                elif event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    sys.exit()
                 # 숫자 키로도 선택 가능
                 elif event.key == pygame.K_1:
                     return "CLASSIC"
@@ -286,11 +289,12 @@ def mode_select_screen():
                 screen.blit(right_arrow, (button_x + button_width + 10, button_rect.centery - 12))
         
         # 조작 안내
-        help_y = HEIGHT - 80
+        help_y = HEIGHT - 100
         help_texts = [
             "↑↓ 키: 선택",
             "Enter: 확인",
-            "마우스: 클릭하여 선택"
+            "마우스: 클릭하여 선택",
+            "ESC: 게임 종료"
         ]
         
         for i, help_text in enumerate(help_texts):
@@ -468,7 +472,15 @@ def game_loop(game_mode):
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                if game_mode == "BOSS" and event.key == pygame.K_f:
+                if event.key == pygame.K_ESCAPE and not evolution_ui_active:
+                    # 일시정지 화면 표시
+                    pause_action = draw_pause_screen(screen)
+                    if pause_action == "restart":
+                        return "restart"
+                    elif pause_action == "quit":
+                        return "mode_select"
+                    # "resume"이면 계속 진행
+                elif game_mode == "BOSS" and event.key == pygame.K_f:
                     if not hasattr(player, 'is_charging') or not player.is_charging:
                         if player.energy >= 30:
                             player.energy -= 30
@@ -1018,6 +1030,101 @@ def draw_boss_ui(screen, boss, player):
         pygame.draw.rect(screen, projectile.color, 
                         (projectile.x, projectile.y, projectile.size, projectile.size))
 
+def draw_pause_screen(screen):
+    """
+    일시정지 화면을 그리는 함수
+    
+    매개변수:
+        screen: pygame.Surface - 게임 화면
+        
+    반환값:
+        str: 사용자 선택 ("resume", "restart", "quit", None)
+    """
+    fm = get_font_manager()
+    
+    # 반투명 오버레이
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 180))
+    screen.blit(overlay, (0, 0))
+    
+    # 제목
+    title_font = fm.get_font('title', 48, bold=True)
+    pause_text = title_font.render("일시정지", True, WHITE)
+    title_rect = pause_text.get_rect(center=(WIDTH//2, HEIGHT//3))
+    screen.blit(pause_text, title_rect)
+    
+    # 버튼 설정
+    button_font = fm.get_font('button', 24)
+    button_width, button_height = 200, 60
+    button_margin = 20
+    
+    # 버튼 위치 계산
+    total_width = button_width * 3 + button_margin * 2
+    start_x = (WIDTH - total_width) // 2
+    buttons_y = HEIGHT//2 + 50
+    
+    # 계속하기 버튼
+    resume_button = pygame.Rect(start_x, buttons_y, button_width, button_height)
+    pygame.draw.rect(screen, GREEN, resume_button)
+    pygame.draw.rect(screen, WHITE, resume_button, 2)
+    resume_text = button_font.render("계속하기", True, BLACK)
+    resume_rect = resume_text.get_rect(center=resume_button.center)
+    screen.blit(resume_text, resume_rect)
+    
+    # 다시하기 버튼
+    restart_button = pygame.Rect(start_x + button_width + button_margin, buttons_y, button_width, button_height)
+    pygame.draw.rect(screen, LIGHT_BLUE, restart_button)
+    pygame.draw.rect(screen, WHITE, restart_button, 2)
+    restart_text = button_font.render("다시하기", True, BLACK)
+    restart_rect = restart_text.get_rect(center=restart_button.center)
+    screen.blit(restart_text, restart_rect)
+    
+    # 시작화면으로 이동 버튼
+    quit_button = pygame.Rect(start_x + (button_width + button_margin) * 2, buttons_y, button_width, button_height)
+    pygame.draw.rect(screen, RED, quit_button)
+    pygame.draw.rect(screen, WHITE, quit_button, 2)
+    quit_text = button_font.render("시작화면으로 이동", True, WHITE)
+    quit_rect = quit_text.get_rect(center=quit_button.center)
+    screen.blit(quit_text, quit_rect)
+    
+    # 단축키 안내
+    help_font = fm.get_font('small', 18)
+    help_y = buttons_y + button_height + 40
+    shortcuts = [
+        ("ESC: 계속하기", GREEN),
+        ("R: 다시하기", LIGHT_BLUE),
+        ("Q: 시작화면으로", RED)
+    ]
+    
+    for i, (text, color) in enumerate(shortcuts):
+        help_text = help_font.render(text, True, color)
+        x = start_x + (button_width + button_margin) * i + button_width//2 - help_text.get_width()//2
+        screen.blit(help_text, (x, help_y))
+    
+    pygame.display.flip()
+    
+    # 이벤트 처리
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:  # 왼쪽 클릭
+                    mouse_pos = event.pos
+                    if resume_button.collidepoint(mouse_pos):
+                        return "resume"
+                    elif restart_button.collidepoint(mouse_pos):
+                        return "restart"
+                    elif quit_button.collidepoint(mouse_pos):
+                        return "quit"
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return "resume"
+                elif event.key == pygame.K_r:
+                    return "restart"
+                elif event.key == pygame.K_q:
+                    return "quit"
+
 def main():
     """
     게임 메인 함수
@@ -1027,16 +1134,21 @@ def main():
     
     while True:
         game_mode = mode_select_screen()
-        next_action = game_loop(game_mode)
         
-        if next_action == "mode_select":
-            continue
-        elif next_action == "restart":
-            game_loop(game_mode)
-        elif next_action == "quit":
-            break
-        else:
-            break
+        # 선택한 모드로 게임을 계속 실행
+        while True:
+            next_action = game_loop(game_mode)
+            
+            if next_action == "mode_select":
+                break  # 모드 선택 화면으로 돌아가기
+            elif next_action == "restart":
+                continue  # 같은 모드로 다시 시작
+            elif next_action == "quit":
+                pygame.quit()
+                sys.exit()
+            else:
+                pygame.quit()
+                sys.exit()
     
     pygame.quit()
     sys.exit()
