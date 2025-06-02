@@ -240,10 +240,33 @@ def mode_select_screen():
         # 화면 그리기
         screen.fill(BLACK)
         
-        # 제목
-        title = title_font.render("뱀 게임", True, WHITE)
-        title_rect = title.get_rect(center=(WIDTH//2, HEIGHT//4))
-        screen.blit(title, title_rect)
+        # 로고 이미지 표시
+        try:
+            logo_image = pygame.image.load("logo.png")
+            # 로고 크기 조정 (원본 크기가 너무 클 경우를 대비)
+            logo_rect = logo_image.get_rect()
+            max_width = WIDTH // 2  # 화면 너비의 절반으로 제한
+            max_height = HEIGHT // 4  # 화면 높이의 1/4로 제한
+            
+            # 비율을 유지하면서 크기 조정
+            if logo_rect.width > max_width or logo_rect.height > max_height:
+                scale_x = max_width / logo_rect.width
+                scale_y = max_height / logo_rect.height
+                scale = min(scale_x, scale_y)  # 더 작은 스케일 사용하여 비율 유지
+                
+                new_width = int(logo_rect.width * scale)
+                new_height = int(logo_rect.height * scale)
+                logo_image = pygame.transform.scale(logo_image, (new_width, new_height))
+            
+            # 로고를 화면 중앙 상단에 배치
+            logo_rect = logo_image.get_rect(center=(WIDTH//2, HEIGHT//4))
+            screen.blit(logo_image, logo_rect)
+            
+        except (pygame.error, FileNotFoundError):
+            # 로고 파일이 없거나 로드할 수 없는 경우 기본 텍스트 표시
+            title = title_font.render("뱀 게임", True, WHITE)
+            title_rect = title.get_rect(center=(WIDTH//2, HEIGHT//4))
+            screen.blit(title, title_rect)
         
         # 버튼들 그리기
         for i, mode in enumerate(modes):
