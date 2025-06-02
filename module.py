@@ -7,7 +7,9 @@ import pygame
 import random
 import math
 import json
+import os
 from datetime import datetime
+from font_manager import get_font_manager
 
 #############################################
 # 공통 상수 (모든 모드에서 사용)
@@ -18,6 +20,7 @@ CELL_SIZE = 10
 LEADERBOARD_FILE = "leaderboard.json"
 
 # 기본 색상 정의
+
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
@@ -852,31 +855,50 @@ def draw_energy_bar(screen, snake):
     alpha = 255 if is_snake_near else 128
     
     # 에너지 바 배경
-    pygame.draw.rect(screen, (WHITE[0], WHITE[1], WHITE[2], alpha), (x-2, y-2, bar_width+4, height+4), 1)
+    bg_rect = (x-2, y-2, bar_width+4, height+4)
     fill = min(bar_width, max(0, int((snake.energy / 150) * bar_width)))
     
+    # 둥근 모서리로 에너지 바 그리기
+    draw_rounded_rect(screen, (WHITE[0], WHITE[1], WHITE[2], alpha), bg_rect, 3)
+    
     # 에너지 바 채우기
-    energy_surface = pygame.Surface((fill, height), pygame.SRCALPHA)
-    energy_surface.fill((RED[0], RED[1], RED[2], alpha))
-    screen.blit(energy_surface, (x, y))
+    if fill > 0:
+        fill_rect = (x, y, fill, height)
+        draw_rounded_rect(screen, (RED[0], RED[1], RED[2], alpha), fill_rect, 2)
     
     # 텍스트 렌더링
-    font = pygame.font.SysFont(None, 24)
+    fm = get_font_manager()
+    font = fm.get_font('small', 24)
     txt = font.render(f"Energy: {int(snake.energy)}", True, (WHITE[0], WHITE[1], WHITE[2], alpha))
     screen.blit(txt, (x, y + height + 4))
 
 def draw_leaderboard(screen, snakes):
-    font = pygame.font.SysFont(None, 24)
+    fm = get_font_manager()
+    title_font = fm.get_font('small', 20)
+    rank_font = fm.get_font('small', 18)
     sorted_snakes = sorted([s for s in snakes if s.alive], key=lambda s: s.score, reverse=True)
     
-    # 리더보드 영역 정의
-    x, y = WIDTH - 220, 10
-    height_per_entry = 25
-    total_height = 40 + len(sorted_snakes[:5]) * height_per_entry
+    def get_ordinal(n):
+        """숫자를 영어 서수로 변환하는 함수"""
+        if 10 <= n % 100 <= 20:  # 11th, 12th, 13th 등 예외 처리
+            suffix = "th"
+        else:
+            suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suffix}"
     
-    # 뱀들의 머리 위치 확인
+    # 리더보드 크기 및 위치 설정
+    board_width = 240
+    header_height = 35
+    row_height = 28
+    max_entries = min(5, len(sorted_snakes))
+    total_height = header_height + max_entries * row_height + 10  # 하단 여백
+    
+    x = WIDTH - board_width - 15
+    y = 15
+    
+    # 뱀들의 머리 위치 확인 (근접 시 투명도 증가)
     any_snake_near = False
-    leaderboard_area = pygame.Rect(x, y, 220, total_height)
+    leaderboard_area = pygame.Rect(x, y, board_width, total_height)
     for snake in snakes:
         if snake.alive:
             head_x, head_y = snake.get_head()
@@ -884,17 +906,70 @@ def draw_leaderboard(screen, snakes):
                 any_snake_near = True
                 break
     
-    # 알파값 설정
-    alpha = 255 if any_snake_near else 128
+    # 알파값 설정 (게임 방해 최소화)
+    bg_alpha = 200 if any_snake_near else 120
+    text_alpha = 255 if any_snake_near else 180
     
-    # 제목 렌더링
-    title = font.render("Live Leaderboard:", True, (GRAY[0], GRAY[1], GRAY[2], alpha))
-    screen.blit(title, (x, y))
+    # 반투명 배경 패널
+    panel_surface = pygame.Surface((board_width, total_height), pygame.SRCALPHA)
     
-    # 순위 렌더링
-    for i, s in enumerate(sorted_snakes[:5]):
-        text = font.render(f"{i+1}. {s.name} - {s.score}", True, (GRAY[0], GRAY[1], GRAY[2], alpha))
-        screen.blit(text, (x, 40 + i * height_per_entry))
+    # 둥근 모서리 배경
+    draw_rounded_rect(panel_surface, (20, 20, 30, bg_alpha), (0, 0, board_width, total_height), 8)
+    draw_rounded_rect(panel_surface, (80, 80, 100, bg_alpha // 2), (0, 0, board_width, total_height), 8)
+    
+    # 헤더 영역 (상단 강조)
+    draw_rounded_rect(panel_surface, (40, 40, 60, bg_alpha), (0, 0, board_width, header_height), 8)
+    
+    # 제목 텍스트
+    title_text = title_font.render("실시간 순위", True, (255, 215, 0, text_alpha))  # 골드색
+    title_rect = title_text.get_rect(center=(board_width // 2, header_height // 2))
+    panel_surface.blit(title_text, title_rect)
+    
+    # 순위 항목들
+    for i, snake in enumerate(sorted_snakes[:max_entries]):
+        row_y = header_height + i * row_height
+        
+        # 행 배경 (홀수/짝수 구분)
+        row_bg_alpha = bg_alpha // 3 if i % 2 == 0 else bg_alpha // 4
+        row_surface = pygame.Surface((board_width - 10, row_height - 2), pygame.SRCALPHA)
+        draw_rounded_rect(row_surface, (50, 50, 70, row_bg_alpha), (0, 0, board_width - 10, row_height - 2), 5)
+        panel_surface.blit(row_surface, (5, row_y + 1))
+        
+        # 순위 텍스트와 색상
+        rank_text = get_ordinal(i + 1)
+        
+        if i == 0:  # 1등
+            rank_color = (255, 215, 0, text_alpha)  # 골드
+        elif i == 1:  # 2등
+            rank_color = (192, 192, 192, text_alpha)  # 실버
+        elif i == 2:  # 3등
+            rank_color = (205, 127, 50, text_alpha)  # 브론즈
+        else:
+            rank_color = (180, 180, 180, text_alpha)  # 회색
+        
+        # 순위 렌더링
+        rank_surface = rank_font.render(rank_text, True, rank_color)
+        panel_surface.blit(rank_surface, (15, row_y + 6))
+        
+        # 플레이어 이름 (최대 8글자로 제한)
+        name = snake.name[:8] + "..." if len(snake.name) > 8 else snake.name
+        name_color = snake.color if hasattr(snake, 'color') else (255, 255, 255)
+        
+        # 플레이어 색상에 알파값 적용
+        if len(name_color) == 3:
+            name_color = (*name_color, text_alpha)
+        
+        name_surface = rank_font.render(name, True, name_color)
+        panel_surface.blit(name_surface, (50, row_y + 6))
+        
+        # 점수 (우측 정렬)
+        score_text = f"{snake.score:,}"  # 천단위 콤마
+        score_surface = rank_font.render(score_text, True, (255, 255, 255, text_alpha))
+        score_rect = score_surface.get_rect()
+        panel_surface.blit(score_surface, (board_width - score_rect.width - 15, row_y + 6))
+    
+    # 패널을 화면에 그리기
+    screen.blit(panel_surface, (x, y))
 
 def draw_vision_cone(screen, x, y, angle, fov, dist, color=(255, 0, 0, 50)):
     """시야 원뿔을 그리는 함수
@@ -966,7 +1041,8 @@ def draw_snake(screen, snake, show_emotion=False):
         screen.blit(s, (segment[0], segment[1]))
     
     if show_emotion:
-        font = pygame.font.SysFont(None, 18)
+        fm = get_font_manager()
+        font = fm.get_font('small', 18)
         emotion_color = EMOTIONS[snake.emotion]["color"]
         txt = font.render(snake.emotion, True, emotion_color)
         screen.blit(txt, (snake.get_head()[0] + 10, snake.get_head()[1] - 5))
@@ -1086,7 +1162,8 @@ def draw_stats(screen, snake):
     if snake.is_ai:
         return
         
-    font = pygame.font.SysFont("malgun gothic", 20)
+    fm = get_font_manager()
+    font = fm.get_font('small', 20)
     x, y = 20, 180
     stats_text = [
         f"스탯 포인트: {snake.stat_points}",
@@ -1148,7 +1225,8 @@ def draw_game_ui(screen, player, snakes, game_mode, food_list=None):
     # 메시지 표시
     for snake in snakes:
         if snake.message and snake.message_duration > 0:
-            font = pygame.font.SysFont("malgun gothic", 24)
+            fm = get_font_manager()
+            font = fm.get_font('button', 24)
             text = font.render(snake.message, True, YELLOW)
             # 화면 중앙 상단에 메시지 표시
             x = (WIDTH - text.get_width()) // 2
@@ -1163,14 +1241,16 @@ def draw_game_ui(screen, player, snakes, game_mode, food_list=None):
             draw_minimap(screen, snakes, food_list)
         draw_status_ui(screen, player)
         if player.dash_cooldown > 0:
-            font = pygame.font.SysFont(None, 24)
+            fm = get_font_manager()
+            font = fm.get_font('small', 24)
             cooldown_text = font.render(f"Dash: {player.dash_cooldown}", True, YELLOW)
             screen.blit(cooldown_text, (20, 140))
     
     # 클래식 모드 UI
     elif game_mode == "CLASSIC":
         if player.dash_cooldown > 0:
-            font = pygame.font.SysFont(None, 24)
+            fm = get_font_manager()
+            font = fm.get_font('small', 24)
             cooldown_text = font.render(f"Dash: {player.dash_cooldown}", True, YELLOW)
             screen.blit(cooldown_text, (20, 60))
 
@@ -1194,7 +1274,8 @@ def draw_status_ui(screen, snake):
     screen.blit(background, (x, y))
     
     # 폰트 설정
-    font = pygame.font.SysFont("malgun gothic", 20)
+    fm = get_font_manager()
+    font = fm.get_font('small', 20)
     
     # 텍스트 렌더링
     level_text = font.render(f"Level: {snake.level}", True, (WHITE[0], WHITE[1], WHITE[2], alpha))
@@ -1213,8 +1294,12 @@ def draw_status_ui(screen, snake):
     # 경험치 바
     exp_ratio = snake.exp / snake.exp_to_level
     bar_surface = pygame.Surface((status_width - 20, 5), pygame.SRCALPHA)
-    pygame.draw.rect(bar_surface, (50, 50, 50, alpha), (0, 0, status_width - 20, 5))
-    pygame.draw.rect(bar_surface, (0, 255, 0, alpha), (0, 0, (status_width - 20) * exp_ratio, 5))
+    
+    # 둥근 모서리로 경험치 바 그리기
+    draw_rounded_rect(bar_surface, (50, 50, 50, alpha), (0, 0, status_width - 20, 5), 3)
+    fill_width = (status_width - 20) * exp_ratio
+    draw_rounded_rect(bar_surface, (0, 255, 0, alpha), (0, 0, fill_width, 5), 3)
+    
     screen.blit(bar_surface, (x + 10, y + 85))
 
 def update_items(food_list, snakes, item_timer, special_item_timer):
@@ -1686,16 +1771,19 @@ def draw_boss_ui(screen, boss, player):
     y = 20
     
     # 체력바 배경
-    pygame.draw.rect(screen, (50, 50, 50), (x-2, y-2, bar_width+4, height+4))
+    bg_rect = (x-2, y-2, bar_width+4, height+4)
+    draw_rounded_rect(screen, (50, 50, 50), bg_rect, 5)
     
     # 체력바
     health_ratio = boss.health / boss.max_health
     health_width = int(bar_width * health_ratio)
     health_color = BOSS_PATTERNS[boss.pattern]["color"]
-    pygame.draw.rect(screen, health_color, (x, y, health_width, height))
+    health_rect = (x, y, health_width, height)
+    draw_rounded_rect(screen, health_color, health_rect, 4)
     
     # 보스 정보
-    font = pygame.font.SysFont("malgun gothic", 20)
+    fm = get_font_manager()
+    font = fm.get_font('small', 20)
     phase_text = font.render(f"Phase {boss.phase}", True, WHITE)
     pattern_text = font.render(f"Pattern: {boss.pattern}", True, BOSS_PATTERNS[boss.pattern]["color"])
     
@@ -1723,3 +1811,37 @@ def draw_boss_ui(screen, boss, player):
         # 테두리 그리기
         pygame.draw.rect(screen, (255, 255, 255), 
                         (safe_x, safe_y, safe_width, safe_height), 2)
+
+def draw_rounded_rect(surface, color, rect, border_radius):
+    """
+    둥근 모서리를 가진 사각형을 그리는 함수
+    
+    매개변수:
+        surface: pygame.Surface - 그릴 표면
+        color: tuple - 색상 (R, G, B) 또는 (R, G, B, A)
+        rect: tuple - (x, y, width, height)
+        border_radius: int - 모서리 둥글기 정도
+    """
+    x, y, width, height = rect
+    
+    # 둥글기가 너무 클 경우 조정
+    border_radius = min(border_radius, width // 2, height // 2)
+    
+    if border_radius <= 0:
+        pygame.draw.rect(surface, color, rect)
+        return
+    
+    # pygame 2.0 이상에서는 border_radius 매개변수를 직접 사용
+    try:
+        pygame.draw.rect(surface, color, rect, border_radius=border_radius)
+    except TypeError:
+        # pygame 1.x 버전에서는 수동으로 둥근 사각형 그리기
+        # 중앙 사각형
+        pygame.draw.rect(surface, color, (x + border_radius, y, width - 2 * border_radius, height))
+        pygame.draw.rect(surface, color, (x, y + border_radius, width, height - 2 * border_radius))
+        
+        # 모서리 원
+        pygame.draw.circle(surface, color, (x + border_radius, y + border_radius), border_radius)
+        pygame.draw.circle(surface, color, (x + width - border_radius, y + border_radius), border_radius)
+        pygame.draw.circle(surface, color, (x + border_radius, y + height - border_radius), border_radius)
+        pygame.draw.circle(surface, color, (x + width - border_radius, y + height - border_radius), border_radius)
