@@ -291,9 +291,11 @@ def mode_select_screen():
                 border_color = (70, 70, 70)  # 회색
                 text_color = GRAY
             
-            # 버튼 배경
-            pygame.draw.rect(screen, button_color, button_rect)
-            pygame.draw.rect(screen, border_color, button_rect, 2)
+            # 버튼 배경 (테두리 포함)
+            draw_rounded_rect(screen, border_color, button_rect, 12)
+            # 버튼 내부 (테두리를 위해 2픽셀 작게)
+            inner_rect = (button_rect.x + 2, button_rect.y + 2, button_rect.width - 4, button_rect.height - 4)
+            draw_rounded_rect(screen, button_color, inner_rect, 10)
             
             # 버튼 텍스트
             mode_text = button_font.render(mode["name"], True, text_color)
@@ -960,27 +962,30 @@ def handle_game_over(screen, player, game_mode):
     
     # 재시작 버튼
     restart_button = pygame.Rect(start_x, buttons_y, button_width, button_height)
-    pygame.draw.rect(screen, GREEN, restart_button)
-    pygame.draw.rect(screen, WHITE, restart_button, 2)
+    draw_rounded_rect(screen, WHITE, restart_button, 8)
+    inner_rect = (restart_button.x + 2, restart_button.y + 2, restart_button.width - 4, restart_button.height - 4)
+    draw_rounded_rect(screen, GREEN, inner_rect, 6)
     restart_text = font.render("재시작", True, BLACK)
-    screen.blit(restart_text, (restart_button.centerx - restart_text.get_width()//2, 
-                              restart_button.centery - restart_text.get_height()//2))
+    restart_rect = restart_text.get_rect(center=restart_button.center)
+    screen.blit(restart_text, restart_rect)
     
     # 모드 선택 버튼
     mode_button = pygame.Rect(start_x + button_width + button_margin, buttons_y, button_width, button_height)
-    pygame.draw.rect(screen, LIGHT_BLUE, mode_button)
-    pygame.draw.rect(screen, WHITE, mode_button, 2)
+    draw_rounded_rect(screen, WHITE, mode_button, 8)
+    inner_rect = (mode_button.x + 2, mode_button.y + 2, mode_button.width - 4, mode_button.height - 4)
+    draw_rounded_rect(screen, LIGHT_BLUE, inner_rect, 6)
     mode_text = font.render("모드 선택", True, BLACK)
-    screen.blit(mode_text, (mode_button.centerx - mode_text.get_width()//2, 
-                           mode_button.centery - mode_text.get_height()//2))
+    mode_rect = mode_text.get_rect(center=mode_button.center)
+    screen.blit(mode_text, mode_rect)
     
     # 끝내기 버튼
     quit_button = pygame.Rect(start_x + (button_width + button_margin) * 2, buttons_y, button_width, button_height)
-    pygame.draw.rect(screen, RED, quit_button)
-    pygame.draw.rect(screen, WHITE, quit_button, 2)
+    draw_rounded_rect(screen, WHITE, quit_button, 8)
+    inner_rect = (quit_button.x + 2, quit_button.y + 2, quit_button.width - 4, quit_button.height - 4)
+    draw_rounded_rect(screen, RED, inner_rect, 6)
     quit_text = font.render("끝내기", True, WHITE)
-    screen.blit(quit_text, (quit_button.centerx - quit_text.get_width()//2, 
-                           quit_button.centery - quit_text.get_height()//2))
+    quit_rect = quit_text.get_rect(center=quit_button.center)
+    screen.blit(quit_text, quit_rect)
     
     # 단축키 안내
     shortcut_font = fm.get_font('small', 20)
@@ -1096,24 +1101,27 @@ def draw_pause_screen(screen):
     
     # 계속하기 버튼
     resume_button = pygame.Rect(start_x, buttons_y, button_width, button_height)
-    pygame.draw.rect(screen, GREEN, resume_button)
-    pygame.draw.rect(screen, WHITE, resume_button, 2)
+    draw_rounded_rect(screen, WHITE, resume_button, 8)
+    inner_rect = (resume_button.x + 2, resume_button.y + 2, resume_button.width - 4, resume_button.height - 4)
+    draw_rounded_rect(screen, GREEN, inner_rect, 6)
     resume_text = button_font.render("계속하기", True, BLACK)
     resume_rect = resume_text.get_rect(center=resume_button.center)
     screen.blit(resume_text, resume_rect)
     
     # 다시하기 버튼
     restart_button = pygame.Rect(start_x + button_width + button_margin, buttons_y, button_width, button_height)
-    pygame.draw.rect(screen, LIGHT_BLUE, restart_button)
-    pygame.draw.rect(screen, WHITE, restart_button, 2)
+    draw_rounded_rect(screen, WHITE, restart_button, 8)
+    inner_rect = (restart_button.x + 2, restart_button.y + 2, restart_button.width - 4, restart_button.height - 4)
+    draw_rounded_rect(screen, LIGHT_BLUE, inner_rect, 6)
     restart_text = button_font.render("다시하기", True, BLACK)
     restart_rect = restart_text.get_rect(center=restart_button.center)
     screen.blit(restart_text, restart_rect)
     
     # 시작화면으로 이동 버튼
     quit_button = pygame.Rect(start_x + (button_width + button_margin) * 2, buttons_y, button_width, button_height)
-    pygame.draw.rect(screen, RED, quit_button)
-    pygame.draw.rect(screen, WHITE, quit_button, 2)
+    draw_rounded_rect(screen, WHITE, quit_button, 8)
+    inner_rect = (quit_button.x + 2, quit_button.y + 2, quit_button.width - 4, quit_button.height - 4)
+    draw_rounded_rect(screen, RED, inner_rect, 6)
     quit_text = button_font.render("시작화면으로 이동", True, WHITE)
     quit_rect = quit_text.get_rect(center=quit_button.center)
     screen.blit(quit_text, quit_rect)
