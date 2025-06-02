@@ -2,6 +2,42 @@
 
 현대적인 게임플레이 요소들이 추가된 스네이크 게임입니다.
 
+## 🚀 게임 실행 방법
+
+### 자동 설치 및 실행 (권장)
+```bash
+# 실행 권한 부여 (최초 1회만)
+chmod +x setup_and_run.sh
+
+# 게임 실행 (환경 자동 설정 포함)
+./setup_and_run.sh
+```
+
+### 수동 설치 및 실행
+```bash
+# 1. 가상환경 생성 (선택사항)
+python3 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 2. 의존성 설치
+pip install -r requirements.txt
+
+# 3. 게임 실행
+python3 main.py
+```
+
+### 간단 실행 (환경이 이미 설정된 경우)
+```bash
+./run_game.sh
+```
+
+## 📋 시스템 요구사항
+- Python 3.7 이상
+- pygame 2.6.1
+- pynput 1.8.1
+- six 1.17.0
+- keyboard 0.13.5
+
 게임 모드
 
 1. 클래식 모드
@@ -242,4 +278,3 @@ def global_attack():
   - `BossSnake` 클래스
   - `BOSS_PATTERNS` 상수
   - `handle_boss_collision()`
-``'
