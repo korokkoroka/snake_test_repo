@@ -173,34 +173,133 @@ def mode_select_screen():
     clock = pygame.time.Clock()
     
     fm = get_font_manager()
-    font = fm.get_font('button', 24)
+    title_font = fm.get_font('title', 48, bold=True)
+    button_font = fm.get_font('button', 24)
+    desc_font = fm.get_font('small', 18)
+    
+    # 버튼 정보
+    modes = [
+        {"name": "클래식 모드", "desc": "기본 뱀 게임 + 대시 기능", "mode": "CLASSIC"},
+        {"name": "진화 모드", "desc": "레벨업과 진화 시스템", "mode": "EVOLUTION"},
+        {"name": "보스전 모드", "desc": "강력한 보스와의 전투", "mode": "BOSS"}
+    ]
+    
+    selected_index = 0  # 현재 선택된 버튼 인덱스
+    button_height = 80
+    button_width = 400
+    button_margin = 20
+    
+    # 버튼 위치 계산
+    total_height = len(modes) * button_height + (len(modes) - 1) * button_margin
+    start_y = (HEIGHT - total_height) // 2 + 50
+    button_x = (WIDTH - button_width) // 2
     
     while True:
+        mouse_pos = pygame.mouse.get_pos()
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_1:
+                if event.key == pygame.K_UP:
+                    selected_index = (selected_index - 1) % len(modes)
+                elif event.key == pygame.K_DOWN:
+                    selected_index = (selected_index + 1) % len(modes)
+                elif event.key == pygame.K_RETURN:
+                    return modes[selected_index]["mode"]
+                # 숫자 키로도 선택 가능
+                elif event.key == pygame.K_1:
                     return "CLASSIC"
                 elif event.key == pygame.K_2:
                     return "EVOLUTION"
                 elif event.key == pygame.K_3:
                     return "BOSS"
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:  # 왼쪽 클릭
+                    for i, mode in enumerate(modes):
+                        button_y = start_y + i * (button_height + button_margin)
+                        button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
+                        if button_rect.collidepoint(mouse_pos):
+                            return mode["mode"]
+            elif event.type == pygame.MOUSEMOTION:
+                # 마우스가 버튼 위에 있으면 선택 상태 변경
+                for i, mode in enumerate(modes):
+                    button_y = start_y + i * (button_height + button_margin)
+                    button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
+                    if button_rect.collidepoint(mouse_pos):
+                        selected_index = i
+                        break
         
+        # 화면 그리기
         screen.fill(BLACK)
-        title = font.render("게임 모드 선택", True, WHITE)
-        mode1 = font.render("1. 클래식 모드 (대시 기능)", True, WHITE)
-        mode2 = font.render("2. 진화 모드", True, WHITE)
-        mode3 = font.render("3. 보스전 모드", True, WHITE)
         
-        screen.blit(title, (WIDTH//2 - 100, HEIGHT//4))
-        screen.blit(mode1, (WIDTH//2 - 150, HEIGHT//2 - 50))
-        screen.blit(mode2, (WIDTH//2 - 150, HEIGHT//2))
-        screen.blit(mode3, (WIDTH//2 - 150, HEIGHT//2 + 50))
+        # 제목
+        title = title_font.render("뱀 게임", True, WHITE)
+        title_rect = title.get_rect(center=(WIDTH//2, HEIGHT//4))
+        screen.blit(title, title_rect)
+        
+        # 버튼들 그리기
+        for i, mode in enumerate(modes):
+            button_y = start_y + i * (button_height + button_margin)
+            button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
+            
+            # 선택된 버튼인지 확인
+            is_selected = (i == selected_index)
+            is_hovered = button_rect.collidepoint(mouse_pos)
+            
+            # 버튼 색상 결정
+            if is_selected:
+                button_color = (80, 120, 200)  # 파란색
+                border_color = (120, 160, 255)  # 밝은 파란색
+                text_color = WHITE
+            elif is_hovered:
+                button_color = (60, 60, 60)  # 어두운 회색
+                border_color = (100, 100, 100)  # 회색
+                text_color = WHITE
+            else:
+                button_color = (40, 40, 40)  # 매우 어두운 회색
+                border_color = (70, 70, 70)  # 회색
+                text_color = GRAY
+            
+            # 버튼 배경
+            pygame.draw.rect(screen, button_color, button_rect)
+            pygame.draw.rect(screen, border_color, button_rect, 2)
+            
+            # 버튼 텍스트
+            mode_text = button_font.render(mode["name"], True, text_color)
+            desc_text = desc_font.render(mode["desc"], True, text_color)
+            
+            # 텍스트 중앙 정렬
+            mode_rect = mode_text.get_rect(center=(button_rect.centerx, button_rect.centery - 12))
+            desc_rect = desc_text.get_rect(center=(button_rect.centerx, button_rect.centery + 12))
+            
+            screen.blit(mode_text, mode_rect)
+            screen.blit(desc_text, desc_rect)
+            
+            # 선택된 버튼에 화살표 표시
+            if is_selected:
+                arrow_font = fm.get_font('button', 24)
+                left_arrow = arrow_font.render("▶", True, WHITE)
+                right_arrow = arrow_font.render("◀", True, WHITE)
+                screen.blit(left_arrow, (button_x - 30, button_rect.centery - 12))
+                screen.blit(right_arrow, (button_x + button_width + 10, button_rect.centery - 12))
+        
+        # 조작 안내
+        help_y = HEIGHT - 80
+        help_texts = [
+            "↑↓ 키: 선택",
+            "Enter: 확인",
+            "마우스: 클릭하여 선택"
+        ]
+        
+        for i, help_text in enumerate(help_texts):
+            help_surface = desc_font.render(help_text, True, GRAY)
+            help_rect = help_surface.get_rect(center=(WIDTH//2, help_y + i * 20))
+            screen.blit(help_surface, help_rect)
+        
         pygame.display.flip()
-
-        clock.tick(30)
+        clock.tick(60)
 
 def handle_evolution(screen, player, event):
     """진화 선택을 처리하는 함수"""
