@@ -7,6 +7,7 @@ import pygame
 import random
 import math
 import json
+import os
 from datetime import datetime
 from font_manager import get_font_manager
 
@@ -19,6 +20,7 @@ CELL_SIZE = 10
 LEADERBOARD_FILE = "leaderboard.json"
 
 # 기본 색상 정의
+
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
@@ -853,13 +855,16 @@ def draw_energy_bar(screen, snake):
     alpha = 255 if is_snake_near else 128
     
     # 에너지 바 배경
-    pygame.draw.rect(screen, (WHITE[0], WHITE[1], WHITE[2], alpha), (x-2, y-2, bar_width+4, height+4), 1)
+    bg_rect = (x-2, y-2, bar_width+4, height+4)
     fill = min(bar_width, max(0, int((snake.energy / 150) * bar_width)))
     
+    # 둥근 모서리로 에너지 바 그리기
+    draw_rounded_rect(screen, (WHITE[0], WHITE[1], WHITE[2], alpha), bg_rect, 3)
+    
     # 에너지 바 채우기
-    energy_surface = pygame.Surface((fill, height), pygame.SRCALPHA)
-    energy_surface.fill((RED[0], RED[1], RED[2], alpha))
-    screen.blit(energy_surface, (x, y))
+    if fill > 0:
+        fill_rect = (x, y, fill, height)
+        draw_rounded_rect(screen, (RED[0], RED[1], RED[2], alpha), fill_rect, 2)
     
     # 텍스트 렌더링
     fm = get_font_manager()
@@ -1222,8 +1227,12 @@ def draw_status_ui(screen, snake):
     # 경험치 바
     exp_ratio = snake.exp / snake.exp_to_level
     bar_surface = pygame.Surface((status_width - 20, 5), pygame.SRCALPHA)
-    pygame.draw.rect(bar_surface, (50, 50, 50, alpha), (0, 0, status_width - 20, 5))
-    pygame.draw.rect(bar_surface, (0, 255, 0, alpha), (0, 0, (status_width - 20) * exp_ratio, 5))
+    
+    # 둥근 모서리로 경험치 바 그리기
+    draw_rounded_rect(bar_surface, (50, 50, 50, alpha), (0, 0, status_width - 20, 5), 3)
+    fill_width = (status_width - 20) * exp_ratio
+    draw_rounded_rect(bar_surface, (0, 255, 0, alpha), (0, 0, fill_width, 5), 3)
+    
     screen.blit(bar_surface, (x + 10, y + 85))
 
 def update_items(food_list, snakes, item_timer, special_item_timer):
@@ -1695,13 +1704,15 @@ def draw_boss_ui(screen, boss, player):
     y = 20
     
     # 체력바 배경
-    pygame.draw.rect(screen, (50, 50, 50), (x-2, y-2, bar_width+4, height+4))
+    bg_rect = (x-2, y-2, bar_width+4, height+4)
+    draw_rounded_rect(screen, (50, 50, 50), bg_rect, 5)
     
     # 체력바
     health_ratio = boss.health / boss.max_health
     health_width = int(bar_width * health_ratio)
     health_color = BOSS_PATTERNS[boss.pattern]["color"]
-    pygame.draw.rect(screen, health_color, (x, y, health_width, height))
+    health_rect = (x, y, health_width, height)
+    draw_rounded_rect(screen, health_color, health_rect, 4)
     
     # 보스 정보
     fm = get_font_manager()
@@ -1733,3 +1744,37 @@ def draw_boss_ui(screen, boss, player):
         # 테두리 그리기
         pygame.draw.rect(screen, (255, 255, 255), 
                         (safe_x, safe_y, safe_width, safe_height), 2)
+
+def draw_rounded_rect(surface, color, rect, border_radius):
+    """
+    둥근 모서리를 가진 사각형을 그리는 함수
+    
+    매개변수:
+        surface: pygame.Surface - 그릴 표면
+        color: tuple - 색상 (R, G, B) 또는 (R, G, B, A)
+        rect: tuple - (x, y, width, height)
+        border_radius: int - 모서리 둥글기 정도
+    """
+    x, y, width, height = rect
+    
+    # 둥글기가 너무 클 경우 조정
+    border_radius = min(border_radius, width // 2, height // 2)
+    
+    if border_radius <= 0:
+        pygame.draw.rect(surface, color, rect)
+        return
+    
+    # pygame 2.0 이상에서는 border_radius 매개변수를 직접 사용
+    try:
+        pygame.draw.rect(surface, color, rect, border_radius=border_radius)
+    except TypeError:
+        # pygame 1.x 버전에서는 수동으로 둥근 사각형 그리기
+        # 중앙 사각형
+        pygame.draw.rect(surface, color, (x + border_radius, y, width - 2 * border_radius, height))
+        pygame.draw.rect(surface, color, (x, y + border_radius, width, height - 2 * border_radius))
+        
+        # 모서리 원
+        pygame.draw.circle(surface, color, (x + border_radius, y + border_radius), border_radius)
+        pygame.draw.circle(surface, color, (x + width - border_radius, y + border_radius), border_radius)
+        pygame.draw.circle(surface, color, (x + border_radius, y + height - border_radius), border_radius)
+        pygame.draw.circle(surface, color, (x + width - border_radius, y + height - border_radius), border_radius)

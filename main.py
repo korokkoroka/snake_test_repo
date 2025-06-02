@@ -156,9 +156,12 @@ def draw_status_ui(screen, snake):
     
     # 경험치 바
     exp_ratio = snake.exp / snake.exp_to_level
-    pygame.draw.rect(screen, (50, 50, 50), (30, 165, status_width - 20, 5))
-    pygame.draw.rect(screen, (0, 255, 0), 
-                    (30, 165, (status_width - 20) * exp_ratio, 5))
+    bar_bg_rect = (30, 165, status_width - 20, 5)
+    bar_fill_rect = (30, 165, (status_width - 20) * exp_ratio, 5)
+    
+    # 둥근 모서리로 경험치 바 그리기
+    draw_rounded_rect(screen, (50, 50, 50), bar_bg_rect, 3)
+    draw_rounded_rect(screen, (0, 255, 0), bar_fill_rect, 3)
 
 def mode_select_screen():
     """
@@ -841,9 +844,12 @@ def draw_stat_window(screen, snake):
         # 레벨 바 (반투명)
         bar_width = 200
         bar_surface = pygame.Surface((bar_width, 5), pygame.SRCALPHA)
-        pygame.draw.rect(bar_surface, (100, 100, 100, 180), (0, 0, bar_width, 5))
-        pygame.draw.rect(bar_surface, (0, 255, 0, 180), 
-                        (0, 0, bar_width * (snake.stats[stat] / MAX_STAT_LEVEL), 5))
+        
+        # 둥근 모서리로 레벨 바 그리기
+        draw_rounded_rect(bar_surface, (100, 100, 100, 180), (0, 0, bar_width, 5), 3)
+        fill_width = bar_width * (snake.stats[stat] / MAX_STAT_LEVEL)
+        draw_rounded_rect(bar_surface, (0, 255, 0, 180), (0, 0, fill_width, 5), 3)
+        
         window_surface.blit(bar_surface, (20, y_pos + 45))
     
     # 안내 메시지
@@ -1002,13 +1008,15 @@ def draw_boss_ui(screen, boss, player):
     y = 20
     
     # 체력바 배경
-    pygame.draw.rect(screen, (50, 50, 50), (x-2, y-2, bar_width+4, height+4))
+    bg_rect = (x-2, y-2, bar_width+4, height+4)
+    draw_rounded_rect(screen, (50, 50, 50), bg_rect, 5)
     
     # 체력바
     health_ratio = boss.health / boss.max_health
     health_width = int(bar_width * health_ratio)
     health_color = BOSS_PATTERNS[boss.pattern]["color"]
-    pygame.draw.rect(screen, health_color, (x, y, health_width, height))
+    health_rect = (x, y, health_width, height)
+    draw_rounded_rect(screen, health_color, health_rect, 4)
     
     # 보스 정보
     fm = get_font_manager()
@@ -1124,6 +1132,40 @@ def draw_pause_screen(screen):
                     return "restart"
                 elif event.key == pygame.K_q:
                     return "quit"
+
+def draw_rounded_rect(surface, color, rect, border_radius):
+    """
+    둥근 모서리를 가진 사각형을 그리는 함수
+    
+    매개변수:
+        surface: pygame.Surface - 그릴 표면
+        color: tuple - 색상 (R, G, B) 또는 (R, G, B, A)
+        rect: tuple - (x, y, width, height)
+        border_radius: int - 모서리 둥글기 정도
+    """
+    x, y, width, height = rect
+    
+    # 둥글기가 너무 클 경우 조정
+    border_radius = min(border_radius, width // 2, height // 2)
+    
+    if border_radius <= 0:
+        pygame.draw.rect(surface, color, rect)
+        return
+    
+    # pygame 2.0 이상에서는 border_radius 매개변수를 직접 사용
+    try:
+        pygame.draw.rect(surface, color, rect, border_radius=border_radius)
+    except TypeError:
+        # pygame 1.x 버전에서는 수동으로 둥근 사각형 그리기
+        # 중앙 사각형
+        pygame.draw.rect(surface, color, (x + border_radius, y, width - 2 * border_radius, height))
+        pygame.draw.rect(surface, color, (x, y + border_radius, width, height - 2 * border_radius))
+        
+        # 모서리 원
+        pygame.draw.circle(surface, color, (x + border_radius, y + border_radius), border_radius)
+        pygame.draw.circle(surface, color, (x + width - border_radius, y + border_radius), border_radius)
+        pygame.draw.circle(surface, color, (x + border_radius, y + height - border_radius), border_radius)
+        pygame.draw.circle(surface, color, (x + width - border_radius, y + height - border_radius), border_radius)
 
 def main():
     """
