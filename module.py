@@ -874,17 +874,31 @@ def draw_energy_bar(screen, snake):
 
 def draw_leaderboard(screen, snakes):
     fm = get_font_manager()
-    font = fm.get_font('small', 24)
+    title_font = fm.get_font('small', 20)
+    rank_font = fm.get_font('small', 18)
     sorted_snakes = sorted([s for s in snakes if s.alive], key=lambda s: s.score, reverse=True)
     
-    # 리더보드 영역 정의
-    x, y = WIDTH - 220, 10
-    height_per_entry = 25
-    total_height = 40 + len(sorted_snakes[:5]) * height_per_entry
+    def get_ordinal(n):
+        """숫자를 영어 서수로 변환하는 함수"""
+        if 10 <= n % 100 <= 20:  # 11th, 12th, 13th 등 예외 처리
+            suffix = "th"
+        else:
+            suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suffix}"
     
-    # 뱀들의 머리 위치 확인
+    # 리더보드 크기 및 위치 설정
+    board_width = 240
+    header_height = 35
+    row_height = 28
+    max_entries = min(5, len(sorted_snakes))
+    total_height = header_height + max_entries * row_height + 10  # 하단 여백
+    
+    x = WIDTH - board_width - 15
+    y = 15
+    
+    # 뱀들의 머리 위치 확인 (근접 시 투명도 증가)
     any_snake_near = False
-    leaderboard_area = pygame.Rect(x, y, 220, total_height)
+    leaderboard_area = pygame.Rect(x, y, board_width, total_height)
     for snake in snakes:
         if snake.alive:
             head_x, head_y = snake.get_head()
@@ -892,17 +906,70 @@ def draw_leaderboard(screen, snakes):
                 any_snake_near = True
                 break
     
-    # 알파값 설정
-    alpha = 255 if any_snake_near else 128
+    # 알파값 설정 (게임 방해 최소화)
+    bg_alpha = 200 if any_snake_near else 120
+    text_alpha = 255 if any_snake_near else 180
     
-    # 제목 렌더링
-    title = font.render("Live Leaderboard:", True, (GRAY[0], GRAY[1], GRAY[2], alpha))
-    screen.blit(title, (x, y))
+    # 반투명 배경 패널
+    panel_surface = pygame.Surface((board_width, total_height), pygame.SRCALPHA)
     
-    # 순위 렌더링
-    for i, s in enumerate(sorted_snakes[:5]):
-        text = font.render(f"{i+1}. {s.name} - {s.score}", True, (GRAY[0], GRAY[1], GRAY[2], alpha))
-        screen.blit(text, (x, 40 + i * height_per_entry))
+    # 둥근 모서리 배경
+    draw_rounded_rect(panel_surface, (20, 20, 30, bg_alpha), (0, 0, board_width, total_height), 8)
+    draw_rounded_rect(panel_surface, (80, 80, 100, bg_alpha // 2), (0, 0, board_width, total_height), 8)
+    
+    # 헤더 영역 (상단 강조)
+    draw_rounded_rect(panel_surface, (40, 40, 60, bg_alpha), (0, 0, board_width, header_height), 8)
+    
+    # 제목 텍스트
+    title_text = title_font.render("실시간 순위", True, (255, 215, 0, text_alpha))  # 골드색
+    title_rect = title_text.get_rect(center=(board_width // 2, header_height // 2))
+    panel_surface.blit(title_text, title_rect)
+    
+    # 순위 항목들
+    for i, snake in enumerate(sorted_snakes[:max_entries]):
+        row_y = header_height + i * row_height
+        
+        # 행 배경 (홀수/짝수 구분)
+        row_bg_alpha = bg_alpha // 3 if i % 2 == 0 else bg_alpha // 4
+        row_surface = pygame.Surface((board_width - 10, row_height - 2), pygame.SRCALPHA)
+        draw_rounded_rect(row_surface, (50, 50, 70, row_bg_alpha), (0, 0, board_width - 10, row_height - 2), 5)
+        panel_surface.blit(row_surface, (5, row_y + 1))
+        
+        # 순위 텍스트와 색상
+        rank_text = get_ordinal(i + 1)
+        
+        if i == 0:  # 1등
+            rank_color = (255, 215, 0, text_alpha)  # 골드
+        elif i == 1:  # 2등
+            rank_color = (192, 192, 192, text_alpha)  # 실버
+        elif i == 2:  # 3등
+            rank_color = (205, 127, 50, text_alpha)  # 브론즈
+        else:
+            rank_color = (180, 180, 180, text_alpha)  # 회색
+        
+        # 순위 렌더링
+        rank_surface = rank_font.render(rank_text, True, rank_color)
+        panel_surface.blit(rank_surface, (15, row_y + 6))
+        
+        # 플레이어 이름 (최대 8글자로 제한)
+        name = snake.name[:8] + "..." if len(snake.name) > 8 else snake.name
+        name_color = snake.color if hasattr(snake, 'color') else (255, 255, 255)
+        
+        # 플레이어 색상에 알파값 적용
+        if len(name_color) == 3:
+            name_color = (*name_color, text_alpha)
+        
+        name_surface = rank_font.render(name, True, name_color)
+        panel_surface.blit(name_surface, (50, row_y + 6))
+        
+        # 점수 (우측 정렬)
+        score_text = f"{snake.score:,}"  # 천단위 콤마
+        score_surface = rank_font.render(score_text, True, (255, 255, 255, text_alpha))
+        score_rect = score_surface.get_rect()
+        panel_surface.blit(score_surface, (board_width - score_rect.width - 15, row_y + 6))
+    
+    # 패널을 화면에 그리기
+    screen.blit(panel_surface, (x, y))
 
 def draw_vision_cone(screen, x, y, angle, fov, dist, color=(255, 0, 0, 50)):
     """시야 원뿔을 그리는 함수

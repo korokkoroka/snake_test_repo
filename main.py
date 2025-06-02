@@ -68,25 +68,53 @@ def draw_evolution_ui(screen, snake):
 
     fm = get_font_manager()
 
-    # 반투명 오버레이 (투명도 조정)
+    # 부드러운 반투명 오버레이
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 180))  # 알파값을 180으로 설정 (0-255)
+    overlay.fill((0, 0, 0, 160))
     screen.blit(overlay, (0, 0))
 
-    # 진화 메뉴 배경
-    menu_width, menu_height = 600, 400
+    # 진화 메뉴 크기 및 위치 (높이 늘림)
+    menu_width, menu_height = 700, 550
     menu_x = (WIDTH - menu_width) // 2
     menu_y = (HEIGHT - menu_height) // 2
     
-    # 메뉴 배경 (밝은 색상으로 변경)
-    pygame.draw.rect(screen, (240, 240, 240), (menu_x, menu_y, menu_width, menu_height))
-    pygame.draw.rect(screen, (100, 100, 100), (menu_x, menu_y, menu_width, menu_height), 3)
+    # 메인 패널 - 둥근 모서리와 그라데이션 효과
+    panel_surface = pygame.Surface((menu_width, menu_height), pygame.SRCALPHA)
+    
+    # 배경 그라데이션 효과 (어두운 파란색에서 검은색으로)
+    for i in range(menu_height):
+        alpha = 200 - (i * 50 // menu_height)  # 위에서 아래로 점점 투명해짐
+        color_intensity = 40 - (i * 20 // menu_height)  # 위에서 아래로 점점 어두워짐
+        line_color = (color_intensity, color_intensity, color_intensity + 10, alpha)
+        pygame.draw.line(panel_surface, line_color, (0, i), (menu_width, i))
+    
+    # 둥근 모서리 적용
+    draw_rounded_rect(panel_surface, (30, 30, 45, 220), (0, 0, menu_width, menu_height), 20)
+    
+    # 테두리 (미묘한 글로우 효과)
+    border_surface = pygame.Surface((menu_width + 4, menu_height + 4), pygame.SRCALPHA)
+    draw_rounded_rect(border_surface, (100, 150, 255, 100), (0, 0, menu_width + 4, menu_height + 4), 22)
+    screen.blit(border_surface, (menu_x - 2, menu_y - 2))
+    screen.blit(panel_surface, (menu_x, menu_y))
 
-    # 제목
-    font_large = fm.get_font('title', 36, bold=True)
-    font = fm.get_font('button', 24)
-    title = font_large.render("진화 선택", True, BLACK)
-    screen.blit(title, (menu_x + (menu_width - title.get_width()) // 2, menu_y + 20))
+    # 제목 - 한국어로 변경
+    title_font = fm.get_font('title', 42, bold=True)
+    subtitle_font = fm.get_font('button', 18)
+    
+    title_text = "진화 선택"
+    subtitle_text = "다음 형태를 선택하세요"
+    
+    # 제목 그림자 효과
+    title_shadow = title_font.render(title_text, True, (0, 0, 0, 150))
+    screen.blit(title_shadow, (menu_x + (menu_width - title_shadow.get_width()) // 2 + 2, menu_y + 32))
+    
+    # 제목 메인 텍스트 (그라데이션 색상)
+    title_main = title_font.render(title_text, True, (255, 255, 255))
+    screen.blit(title_main, (menu_x + (menu_width - title_main.get_width()) // 2, menu_y + 30))
+    
+    # 서브타이틀
+    subtitle_main = subtitle_font.render(subtitle_text, True, (180, 180, 200))
+    screen.blit(subtitle_main, (menu_x + (menu_width - subtitle_main.get_width()) // 2, menu_y + 80))
 
     # 진화 옵션 표시
     available_forms = []
@@ -95,32 +123,108 @@ def draw_evolution_ui(screen, snake):
     elif snake.level >= 5:
         available_forms = ["SPEEDER", "TANK", "HUNTER"]
 
+    # 옵션 카드들 (위치 조정)
+    card_width = menu_width - 80
+    card_height = 85  # 높이 약간 줄임
+    start_y = menu_y + 120  # 시작 위치 조정
+    
+    name_font = fm.get_font('button', 24, bold=True)
+    desc_font = fm.get_font('small', 16)
+    key_font = fm.get_font('button', 20, bold=True)
+
     for i, form in enumerate(available_forms):
         form_data = EVOLUTION_FORMS[form]
-        y_pos = menu_y + 100 + i * 80
+        card_y = start_y + i * (card_height + 12)  # 카드 간격 줄임
         
-        # 선택 박스 배경 (더 밝은 배경)
-        pygame.draw.rect(screen, (250, 250, 250), 
-                        (menu_x + 20, y_pos - 10, menu_width - 40, 70))
-        pygame.draw.rect(screen, form_data["color"], 
-                        (menu_x + 20, y_pos - 10, menu_width - 40, 70), 2)
+        # 카드 배경 - 진화 형태 색상에 맞는 그라데이션
+        card_surface = pygame.Surface((card_width, card_height), pygame.SRCALPHA)
         
-        # 진화 형태 이름 (더 큰 폰트와 진한 색상)
-        name_text = font.render(f"{i+1}. {form}", True, BLACK)
-        screen.blit(name_text, (menu_x + 40, y_pos))
+        # 형태별 배경색 (반투명)
+        base_color = form_data["color"]
+        bg_color = (base_color[0], base_color[1], base_color[2], 60)
+        border_color = (base_color[0], base_color[1], base_color[2], 180)
         
-        # 능력 목록 (색상 구분)
-        abilities_text = font.render(" | ".join(form_data["abilities"]), True, form_data["color"])
-        screen.blit(abilities_text, (menu_x + 40, y_pos + 30))
+        # 카드 배경
+        draw_rounded_rect(card_surface, bg_color, (0, 0, card_width, card_height), 12)
+        draw_rounded_rect(card_surface, border_color, (0, 0, card_width, card_height), 12)
+        
+        # 왼쪽 색상 스트라이프
+        stripe_surface = pygame.Surface((8, card_height - 4), pygame.SRCALPHA)
+        stripe_surface.fill(border_color)
+        card_surface.blit(stripe_surface, (2, 2))
+        
+        screen.blit(card_surface, (menu_x + 40, card_y))
+        
+        # 키 번호 (왼쪽 상단 원형 배지)
+        key_radius = 15
+        key_center = (menu_x + 65, card_y + 20)
+        pygame.draw.circle(screen, border_color, key_center, key_radius)
+        pygame.draw.circle(screen, (255, 255, 255), key_center, key_radius - 2)
+        
+        key_text = key_font.render(str(i + 1), True, base_color)
+        key_rect = key_text.get_rect(center=key_center)
+        screen.blit(key_text, key_rect)
+        
+        # 진화 형태 이름
+        name_x = menu_x + 95
+        name_y = card_y + 12  # 위치 조정
+        
+        name_text = name_font.render(form, True, (255, 255, 255))
+        screen.blit(name_text, (name_x, name_y))
+        
+        # 설명 텍스트
+        desc_text = form_data["description"]
+        desc_render = desc_font.render(desc_text, True, (200, 200, 220))
+        screen.blit(desc_render, (name_x, name_y + 26))  # 위치 조정
+        
+        # 능력 목록 (작은 태그 형태)
+        abilities_y = name_y + 48  # 위치 조정
+        tag_x = name_x
+        
+        for j, ability in enumerate(form_data["abilities"]):
+            # 각 능력을 작은 태그로 표시
+            ability_text = desc_font.render(ability, True, (255, 255, 255))
+            tag_width = ability_text.get_width() + 16
+            tag_height = 18  # 높이 줄임
+            
+            # 태그 배경
+            tag_surface = pygame.Surface((tag_width, tag_height), pygame.SRCALPHA)
+            draw_rounded_rect(tag_surface, (base_color[0], base_color[1], base_color[2], 120), (0, 0, tag_width, tag_height), 9)
+            screen.blit(tag_surface, (tag_x, abilities_y))
+            
+            # 태그 텍스트
+            text_rect = ability_text.get_rect(center=(tag_x + tag_width // 2, abilities_y + tag_height // 2))
+            screen.blit(ability_text, text_rect)
+            
+            tag_x += tag_width + 8  # 다음 태그 위치
+            
+            # 한 줄에 너무 많으면 다음 줄로
+            if tag_x > menu_x + card_width - 100:
+                break
 
-    # 안내 메시지 (하이라이트 추가)
-    guide_box = pygame.Surface((400, 40), pygame.SRCALPHA)
-    guide_box.fill((0, 0, 0, 50))
-    screen.blit(guide_box, (menu_x + (menu_width - 400) // 2, menu_y + menu_height - 50))
+    # 하단 안내 메시지 - 위치 조정하여 겹치지 않도록
+    guide_y = menu_y + menu_height - 70  # 위치 조정
+    guide_surface = pygame.Surface((menu_width - 40, 55), pygame.SRCALPHA)  # 크기 조정
+    draw_rounded_rect(guide_surface, (0, 0, 0, 100), (0, 0, menu_width - 40, 55), 15)
+    screen.blit(guide_surface, (menu_x + 20, guide_y))
     
-    guide = font.render("1-3 키로 선택하거나 ESC로 취소", True, BLACK)
-    screen.blit(guide, (menu_x + (menu_width - guide.get_width()) // 2, 
-                       menu_y + menu_height - 40))
+    # 안내 텍스트들 - 한국어로 변경
+    guide_font = fm.get_font('small', 18)
+    guide_lines = [
+        "숫자 키(1-3)를 눌러 진화 선택",
+        "ESC: 취소하고 현재 형태 유지"
+    ]
+    
+    for i, line in enumerate(guide_lines):
+        if i == 0:  # 첫 번째 줄은 강조
+            text_color = (255, 255, 100)
+        else:  # 두 번째 줄은 부드럽게
+            text_color = (180, 180, 200)
+            
+        guide_text = guide_font.render(line, True, text_color)
+        text_x = menu_x + (menu_width - guide_text.get_width()) // 2
+        text_y = guide_y + 10 + i * 20  # 간격 조정
+        screen.blit(guide_text, (text_x, text_y))
 
     return True
 
@@ -818,9 +922,9 @@ def draw_stat_window(screen, snake):
         screen: pygame.Surface - 게임 화면
         snake: Snake - 스탯을 표시할 뱀 객체
     """
-    # 창 크기와 위치 설정 (높이 감소)
-    window_width = 300
-    window_height = 300  # 400에서 300으로 감소
+    # 창 크기와 위치 설정 (크기 증가)
+    window_width = 450  # 300에서 450으로 증가
+    window_height = 380  # 300에서 380으로 증가
     x = (WIDTH - window_width) // 2
     y = (HEIGHT - window_height) // 2
     
@@ -831,19 +935,19 @@ def draw_stat_window(screen, snake):
     
     # 폰트 매니저 사용
     fm = get_font_manager()
-    font_large = fm.get_font('title', 30, bold=True)
-    font = fm.get_font('button', 20)
+    font_large = fm.get_font('title', 32, bold=True)  # 폰트 크기 증가
+    font = fm.get_font('button', 22)  # 폰트 크기 증가
     
     title = font_large.render("스탯 업그레이드", True, (255, 255, 255, 180))
     title_surface = pygame.Surface(title.get_size(), pygame.SRCALPHA)
     title_surface.blit(title, (0, 0))
-    window_surface.blit(title_surface, ((window_width - title.get_width()) // 2, 20))
+    window_surface.blit(title_surface, ((window_width - title.get_width()) // 2, 25))  # 위치 조정
     
     # 스탯 포인트 표시
     points_text = font.render(f"남은 스탯 포인트: {snake.stat_points}", True, (255, 255, 255, 180))
     points_surface = pygame.Surface(points_text.get_size(), pygame.SRCALPHA)
     points_surface.blit(points_text, (0, 0))
-    window_surface.blit(points_surface, (20, 70))
+    window_surface.blit(points_surface, (30, 80))  # 여백 증가
     
     # 스탯 목록 (방어력과 공격력 제거)
     stats = [
@@ -852,36 +956,36 @@ def draw_stat_window(screen, snake):
     ]
     
     for i, (name, stat, desc) in enumerate(stats):
-        y_pos = 120 + i * 60
+        y_pos = 140 + i * 90  # 간격 증가 (60에서 90으로)
         
         # 스탯 이름과 레벨
         stat_text = font.render(f"{name}: {snake.stats[stat]}/{MAX_STAT_LEVEL}", True, (255, 255, 255, 180))
         stat_surface = pygame.Surface(stat_text.get_size(), pygame.SRCALPHA)
         stat_surface.blit(stat_text, (0, 0))
-        window_surface.blit(stat_surface, (20, y_pos))
+        window_surface.blit(stat_surface, (30, y_pos))  # 여백 증가
         
-        # 설명
+        # 설명 (텍스트와 설명 사이 간격 증가)
         desc_text = font.render(desc, True, (200, 200, 200, 180))
         desc_surface = pygame.Surface(desc_text.get_size(), pygame.SRCALPHA)
         desc_surface.blit(desc_text, (0, 0))
-        window_surface.blit(desc_surface, (20, y_pos + 25))
+        window_surface.blit(desc_surface, (30, y_pos + 30))  # 간격 증가 (25에서 30으로)
         
-        # 레벨 바 (반투명)
-        bar_width = 200
-        bar_surface = pygame.Surface((bar_width, 5), pygame.SRCALPHA)
+        # 레벨 바 (반투명) - 설명과 게이지 사이 간격 증가
+        bar_width = 320  # 바 길이 증가 (200에서 320으로)
+        bar_surface = pygame.Surface((bar_width, 8), pygame.SRCALPHA)  # 바 높이 증가 (5에서 8로)
         
         # 둥근 모서리로 레벨 바 그리기
-        draw_rounded_rect(bar_surface, (100, 100, 100, 180), (0, 0, bar_width, 5), 3)
+        draw_rounded_rect(bar_surface, (100, 100, 100, 180), (0, 0, bar_width, 8), 4)  # 반지름 증가
         fill_width = bar_width * (snake.stats[stat] / MAX_STAT_LEVEL)
-        draw_rounded_rect(bar_surface, (0, 255, 0, 180), (0, 0, fill_width, 5), 3)
+        draw_rounded_rect(bar_surface, (0, 255, 0, 180), (0, 0, fill_width, 8), 4)  # 반지름 증가
         
-        window_surface.blit(bar_surface, (20, y_pos + 45))
+        window_surface.blit(bar_surface, (30, y_pos + 55))  # 간격 증가 (45에서 55로)
     
-    # 안내 메시지
+    # 안내 메시지 (위치 조정)
     guide = font.render("ESC: 닫기", True, (255, 255, 255, 180))
     guide_surface = pygame.Surface(guide.get_size(), pygame.SRCALPHA)
     guide_surface.blit(guide, (0, 0))
-    window_surface.blit(guide_surface, (20, window_height - 40))
+    window_surface.blit(guide_surface, (30, window_height - 50))  # 여백 증가
     
     # 최종 창을 화면에 표시
     screen.blit(window_surface, (x, y))
