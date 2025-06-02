@@ -5,7 +5,7 @@ class FontManager:
     """크로스 플랫폼 폰트 관리 클래스"""
     
     def __init__(self):
-        self.local_font_path = "fonts/NotoSansKR-Variable.ttf"
+        self.local_font_path = "fonts/PretendardVariable.ttf"
         self.font_available = os.path.exists(self.local_font_path)
         
         if self.font_available:
