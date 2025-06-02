@@ -14,6 +14,9 @@ import sys
 import pygame
 import random
 import math
+import json
+import os
+from datetime import datetime
 from module import (
     Snake, Food, SpecialItem, spawn_food, spawn_ai_snake,
     draw_energy_bar, draw_snake, draw_leaderboard, handle_collisions,
@@ -24,6 +27,7 @@ from module import (
     # 보스전 관련 임포트
     BossSnake, draw_boss_ui, handle_boss_collision, BOSS_PATTERNS
 )
+from font_manager import get_font_manager
 
 # 추가 색상 정의
 BLUE = (0, 0, 255)
@@ -62,6 +66,8 @@ def draw_evolution_ui(screen, snake):
     if not snake.can_evolve():
         return False
 
+    fm = get_font_manager()
+
     # 반투명 오버레이 (투명도 조정)
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 180))  # 알파값을 180으로 설정 (0-255)
@@ -77,8 +83,8 @@ def draw_evolution_ui(screen, snake):
     pygame.draw.rect(screen, (100, 100, 100), (menu_x, menu_y, menu_width, menu_height), 3)
 
     # 제목
-    font_large = pygame.font.SysFont("malgun gothic", 36)
-    font = pygame.font.SysFont("malgun gothic", 24)
+    font_large = fm.get_font('title', 36, bold=True)
+    font = fm.get_font('button', 24)
     title = font_large.render("진화 선택", True, BLACK)
     screen.blit(title, (menu_x + (menu_width - title.get_width()) // 2, menu_y + 20))
 
@@ -131,12 +137,14 @@ def draw_status_ui(screen, snake):
         - 현재 진화 형태 표시
         - 경험치 바 시각화
     """
+    fm = get_font_manager()
+    
     # 상태 UI 배경
     status_width = 200
     pygame.draw.rect(screen, (0, 0, 0, 128), (20, 80, status_width, 100))
     
     # 레벨과 경험치 표시
-    font = pygame.font.SysFont("malgun gothic", 20)
+    font = fm.get_font('button', 20)
     level_text = font.render(f"Level: {snake.level}", True, WHITE)
     exp_text = font.render(f"EXP: {snake.exp}/{snake.exp_to_level}", True, WHITE)
     form_text = font.render(f"Form: {snake.evolution_form}", True, 
@@ -161,11 +169,25 @@ def mode_select_screen():
     """
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("게임 모드 선택")
-    font = pygame.font.SysFont("malgun gothic", 24)
+    pygame.display.set_caption("Snake Game - Mode Selection")
     clock = pygame.time.Clock()
-
+    
+    fm = get_font_manager()
+    font = fm.get_font('button', 24)
+    
     while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_1:
+                    return "CLASSIC"
+                elif event.key == pygame.K_2:
+                    return "EVOLUTION"
+                elif event.key == pygame.K_3:
+                    return "BOSS"
+        
         screen.fill(BLACK)
         title = font.render("게임 모드 선택", True, WHITE)
         mode1 = font.render("1. 클래식 모드 (대시 기능)", True, WHITE)
@@ -178,17 +200,6 @@ def mode_select_screen():
         screen.blit(mode3, (WIDTH//2 - 150, HEIGHT//2 + 50))
         pygame.display.flip()
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_1:
-                    return "CLASSIC"
-                elif event.key == pygame.K_2:
-                    return "EVOLUTION"
-                elif event.key == pygame.K_3:
-                    return "BOSS"
         clock.tick(30)
 
 def handle_evolution(screen, player, event):
@@ -517,6 +528,8 @@ def draw_snake(screen, snake):
 
 def draw_game_ui(screen, player, snakes, game_mode, food_list=None):
     """게임 UI 그리기"""
+    fm = get_font_manager()
+    
     # 기본 UI (보스 모드가 아닐 때만 리더보드 표시)
     if game_mode != "BOSS":
         draw_leaderboard(screen, snakes)
@@ -525,7 +538,7 @@ def draw_game_ui(screen, player, snakes, game_mode, food_list=None):
     # 메시지 표시
     for snake in snakes:
         if snake.message and snake.message_duration > 0:
-            font = pygame.font.SysFont("malgun gothic", 24)
+            font = fm.get_font('button', 24)
             text = font.render(snake.message, True, YELLOW)
             # 화면 중앙 상단에서 체력바 아래로 메시지 위치 이동
             x = (WIDTH - text.get_width()) // 2
@@ -553,7 +566,7 @@ def draw_game_ui(screen, player, snakes, game_mode, food_list=None):
         # 도움말 메시지 초기화
         messages = []
         tank_messages = []  # Tank 관련 메시지 별도 관리
-        font = pygame.font.SysFont("malgun gothic", 20)
+        font = fm.get_font('small', 20)
         
         # 기본 조작 도움말
         messages.append(("SPACE: 대시 사용", WHITE))
@@ -617,7 +630,7 @@ def draw_game_ui(screen, player, snakes, game_mode, food_list=None):
     # 클래식 모드 UI
     elif game_mode == "CLASSIC":
         if player.dash_cooldown > 0:
-            font = pygame.font.SysFont(None, 24)
+            font = fm.get_font('button', 24)
             cooldown_text = font.render(f"Dash: {player.dash_cooldown}", True, YELLOW)
             screen.blit(cooldown_text, (20, 60))
 
@@ -677,9 +690,11 @@ def draw_stat_window(screen, snake):
     pygame.draw.rect(window_surface, (50, 50, 50, 180), (0, 0, window_width, window_height))
     pygame.draw.rect(window_surface, (255, 255, 255, 180), (0, 0, window_width, window_height), 2)
     
-    # 제목
-    font_large = pygame.font.SysFont("malgun gothic", 30)
-    font = pygame.font.SysFont("malgun gothic", 20)
+    # 폰트 매니저 사용
+    fm = get_font_manager()
+    font_large = fm.get_font('title', 30, bold=True)
+    font = fm.get_font('button', 20)
+    
     title = font_large.render("스탯 업그레이드", True, (255, 255, 255, 180))
     title_surface = pygame.Surface(title.get_size(), pygame.SRCALPHA)
     title_surface.blit(title, (0, 0))
@@ -784,9 +799,10 @@ def handle_game_over(screen, player, game_mode):
     overlay.fill((0, 0, 0, 180))
     screen.blit(overlay, (0, 0))
     
-    # 게임 오버 텍스트
-    font_large = pygame.font.SysFont("malgun gothic", 72)
-    font = pygame.font.SysFont("malgun gothic", 36)
+    # 폰트 매니저 사용
+    fm = get_font_manager()
+    font_large = fm.get_font('title', 72, bold=True)
+    font = fm.get_font('button', 36)
     
     game_over_text = font_large.render("GAME OVER", True, RED)
     screen.blit(game_over_text, (WIDTH//2 - game_over_text.get_width()//2, HEIGHT//3))
@@ -827,7 +843,7 @@ def handle_game_over(screen, player, game_mode):
                            quit_button.centery - quit_text.get_height()//2))
     
     # 단축키 안내
-    shortcut_font = pygame.font.SysFont("malgun gothic", 20)
+    shortcut_font = fm.get_font('small', 20)
     shortcuts = [
         ("R: 재시작", GREEN),
         ("M: 모드 선택", LIGHT_BLUE),
@@ -884,7 +900,8 @@ def draw_boss_ui(screen, boss, player):
     pygame.draw.rect(screen, health_color, (x, y, health_width, height))
     
     # 보스 정보
-    font = pygame.font.SysFont("malgun gothic", 20)
+    fm = get_font_manager()
+    font = fm.get_font('small', 20)
     
     # 정보 텍스트 렌더링
     phase_text = font.render(f"Phase {boss.phase}", True, WHITE)

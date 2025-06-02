@@ -8,6 +8,7 @@ import random
 import math
 import json
 from datetime import datetime
+from font_manager import get_font_manager
 
 #############################################
 # 공통 상수 (모든 모드에서 사용)
@@ -861,12 +862,14 @@ def draw_energy_bar(screen, snake):
     screen.blit(energy_surface, (x, y))
     
     # 텍스트 렌더링
-    font = pygame.font.SysFont(None, 24)
+    fm = get_font_manager()
+    font = fm.get_font('small', 24)
     txt = font.render(f"Energy: {int(snake.energy)}", True, (WHITE[0], WHITE[1], WHITE[2], alpha))
     screen.blit(txt, (x, y + height + 4))
 
 def draw_leaderboard(screen, snakes):
-    font = pygame.font.SysFont(None, 24)
+    fm = get_font_manager()
+    font = fm.get_font('small', 24)
     sorted_snakes = sorted([s for s in snakes if s.alive], key=lambda s: s.score, reverse=True)
     
     # 리더보드 영역 정의
@@ -966,7 +969,8 @@ def draw_snake(screen, snake, show_emotion=False):
         screen.blit(s, (segment[0], segment[1]))
     
     if show_emotion:
-        font = pygame.font.SysFont(None, 18)
+        fm = get_font_manager()
+        font = fm.get_font('small', 18)
         emotion_color = EMOTIONS[snake.emotion]["color"]
         txt = font.render(snake.emotion, True, emotion_color)
         screen.blit(txt, (snake.get_head()[0] + 10, snake.get_head()[1] - 5))
@@ -1086,7 +1090,8 @@ def draw_stats(screen, snake):
     if snake.is_ai:
         return
         
-    font = pygame.font.SysFont("malgun gothic", 20)
+    fm = get_font_manager()
+    font = fm.get_font('small', 20)
     x, y = 20, 180
     stats_text = [
         f"스탯 포인트: {snake.stat_points}",
@@ -1148,7 +1153,8 @@ def draw_game_ui(screen, player, snakes, game_mode, food_list=None):
     # 메시지 표시
     for snake in snakes:
         if snake.message and snake.message_duration > 0:
-            font = pygame.font.SysFont("malgun gothic", 24)
+            fm = get_font_manager()
+            font = fm.get_font('button', 24)
             text = font.render(snake.message, True, YELLOW)
             # 화면 중앙 상단에 메시지 표시
             x = (WIDTH - text.get_width()) // 2
@@ -1163,14 +1169,16 @@ def draw_game_ui(screen, player, snakes, game_mode, food_list=None):
             draw_minimap(screen, snakes, food_list)
         draw_status_ui(screen, player)
         if player.dash_cooldown > 0:
-            font = pygame.font.SysFont(None, 24)
+            fm = get_font_manager()
+            font = fm.get_font('small', 24)
             cooldown_text = font.render(f"Dash: {player.dash_cooldown}", True, YELLOW)
             screen.blit(cooldown_text, (20, 140))
     
     # 클래식 모드 UI
     elif game_mode == "CLASSIC":
         if player.dash_cooldown > 0:
-            font = pygame.font.SysFont(None, 24)
+            fm = get_font_manager()
+            font = fm.get_font('small', 24)
             cooldown_text = font.render(f"Dash: {player.dash_cooldown}", True, YELLOW)
             screen.blit(cooldown_text, (20, 60))
 
@@ -1194,7 +1202,8 @@ def draw_status_ui(screen, snake):
     screen.blit(background, (x, y))
     
     # 폰트 설정
-    font = pygame.font.SysFont("malgun gothic", 20)
+    fm = get_font_manager()
+    font = fm.get_font('small', 20)
     
     # 텍스트 렌더링
     level_text = font.render(f"Level: {snake.level}", True, (WHITE[0], WHITE[1], WHITE[2], alpha))
@@ -1695,7 +1704,8 @@ def draw_boss_ui(screen, boss, player):
     pygame.draw.rect(screen, health_color, (x, y, health_width, height))
     
     # 보스 정보
-    font = pygame.font.SysFont("malgun gothic", 20)
+    fm = get_font_manager()
+    font = fm.get_font('small', 20)
     phase_text = font.render(f"Phase {boss.phase}", True, WHITE)
     pattern_text = font.render(f"Pattern: {boss.pattern}", True, BOSS_PATTERNS[boss.pattern]["color"])
     
